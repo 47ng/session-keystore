@@ -53,5 +53,10 @@ export const saveToWindowName = (name: string, data: string) => {
 
 export const loadFromWindowName = (name: string) => {
   const saved = loadObjectFromWindowName()
-  return saved[name] || null
+  if (!(name in saved)) {
+    return null
+  }
+  const { [name]: out, ...safe } = saved
+  window.name = JSON.stringify(safe)
+  return out || null
 }

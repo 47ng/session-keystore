@@ -103,6 +103,7 @@ export default class SessionKeystore<KeyName = string> {
   private _load() {
     const a = loadFromWindowName(this._storageKey)
     const b = window.sessionStorage.getItem(this._storageKey)
+    window.sessionStorage.removeItem(this._storageKey)
     if (!a || !b) {
       return
     }
