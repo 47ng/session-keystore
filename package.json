@@ -1,6 +1,6 @@
 {
   "name": "typescript-library-starter",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Template repository for TypeScript libraries",
   "main": "dist/index.js",
   "license": "MIT",
