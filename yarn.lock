@@ -305,6 +305,16 @@
     "@types/istanbul-reports" "^1.1.1"
     "@types/yargs" "^13.0.0"
 
+"@stablelib/base64@^0.7.2":
+  version "0.7.2"
+  resolved "https://registry.yarnpkg.com/@stablelib/base64/-/base64-0.7.2.tgz#fbbb8d60c26f514cdcb5b791cf911bfb1db4b4b4"
+  integrity sha1-+7uNYMJvUUzctbeRz5Eb+x20tLQ=
+
+"@stablelib/utf8@^0.10.1":
+  version "0.10.1"
+  resolved "https://registry.yarnpkg.com/@stablelib/utf8/-/utf8-0.10.1.tgz#eecf54884da7b2bee235e3c70efb8cd5c07ba5bd"
+  integrity sha512-+uM1YZ4MhBC82vt99prF7DXNGqhYmJ9cQ3p5qNowMNkkzn9OWEkqBvguBW3ChAt7JvqZ3SD5HJOfc6YgnfMTHw==
+
 "@types/babel__core@^7.1.0":
   version "7.1.2"
   resolved "https://registry.yarnpkg.com/@types/babel__core/-/babel__core-7.1.2.tgz#608c74f55928033fce18b99b213c16be4b3d114f"

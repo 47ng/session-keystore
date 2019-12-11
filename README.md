@@ -1,42 +1,74 @@
-# `typescript-library-starter`
+# `session-keystore`
 
-[![MIT License](https://img.shields.io/github/license/47ng/typescript-library-starter.svg?color=blue)](https://github.com/47ng/typescript-library-starter/blob/master/LICENSE)
-[![Travis CI Build](https://img.shields.io/travis/com/47ng/typescript-library-starter.svg)](https://travis-ci.com/47ng/typescript-library-starter)
-[![Average issue resolution time](https://isitmaintained.com/badge/resolution/47ng/typescript-library-starter.svg)](https://isitmaintained.com/project/47ng/typescript-library-starter)
-[![Number of open issues](https://isitmaintained.com/badge/open/47ng/typescript-library-starter.svg)](https://isitmaintained.com/project/47ng/typescript-library-starter)
+[![MIT License](https://img.shields.io/github/license/47ng/session-keystore.svg?color=blue)](https://github.com/47ng/session-keystore/blob/master/LICENSE)
+[![Travis CI Build](https://img.shields.io/travis/com/47ng/session-keystore.svg)](https://travis-ci.com/47ng/session-keystore)
+[![Average issue resolution time](https://isitmaintained.com/badge/resolution/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
+[![Number of open issues](https://isitmaintained.com/badge/open/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 
-Template repository for TypeScript libraries.
+Secure cryptographic key storage in the browser.
+
+## Features
+
+- In-memory storage (no clear-text persistance to disk)
+- Session-bound (deleted when closing tab/window)
+- Survives hard-reloads of the page
+- Optional expiration dates
 
 ## Installation
 
-✂️---
-_Cut here_
-
-1. [Use this repository as a template](https://github.com/47ng/typescript-library-starter/generate) to create your own.
-2. Replace all mentions of `typescript-library-starter` with the name
-   of your package.
-3. Setup Travis CI by adding an NPM deploy token and a Slack channel token:
-
-```zsh
-# Copy your NPM deploy token to clipboard, then:
-$ travis encrypt $(pbpaste) --add deploy.api_key --com
-
-# Copy your Slack channel token to clipboard, then:
-$ travis encrypt $(pbpaste) --add notifications.slack.rooms --com
-```
-
---- ✂️
-
 ```shell
-$ yarn add typescript-library-starter
+$ yarn add session-keystore
 # or
-$ npm i typescript-library-starter
+$ npm i session-keystore
 ```
 
 ## Usage
 
-## Configuration
+```ts
+import SessionKeystore from 'session-keystore'
+
+// Create a store
+const store = new SessionKeystore()
+
+// You can create multiple stores, but give them a unique name:
+// (default name is 'session-keystore')
+const otherStore = new SessionKeystore('other')
+
+// Save a session-bound key
+store.set('foo', 'supersecret')
+
+// Set an expiration date (Date or number of ms)
+store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5) // 5 minutes
+
+// Retrieve the key
+const key = store.get('bar')
+// key will be null if it has expired
+
+// Revoke a single key
+store.delete('foo')
+
+// Clear all keys in storage
+store.clear()
+
+// Strong typing of the possible keys:
+const typedStore = new SessionKeystore<'foo' | 'bar'>()
+
+typedStore.get('foo') // ok
+typedStore.get('bar') // ok
+typedStore.get('egg') // Error: Argument of type '"egg"' is not assignable to parameter of type '"foo" | "bar"'
+
+// Add spies for key access and expiration
+store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5, {
+  onAccess: (keyName, callStack) => console.dir({ keyName, callStack }),
+  onExpired: keyName => console.warn(keyName, 'has expired')
+})
+```
+
+## How it works
+
+Heavily inspired from ProtonMail's Secure Session Storage
+https://github.com/ProtonMail/proton-shared/blob/master/lib/helpers/secureSessionStorage.js#L7
 
 ## License
 
-[MIT](https://github.com/47ng/typescript-library-starter/blob/master/LICENSE) - Made with ❤️ by [François Best](https://francoisbest.com).
+[MIT](https://github.com/47ng/session-keystore/blob/master/LICENSE) - Made with ❤️ by [François Best](https://francoisbest.com).

@@ -46,5 +46,9 @@
   },
   "husky": {
     "pre-push": "run-s test build"
+  },
+  "dependencies": {
+    "@stablelib/base64": "^0.7.2",
+    "@stablelib/utf8": "^0.10.1"
   }
 }
