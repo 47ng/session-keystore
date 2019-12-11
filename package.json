@@ -1,7 +1,7 @@
 {
   "name": "session-keystore",
   "version": "0.1.0",
-  "description": "Template repository for TypeScript libraries",
+  "description": "Secure cryptographic key storage in the browser",
   "main": "dist/index.js",
   "license": "MIT",
   "author": {
@@ -14,8 +14,8 @@
     "url": "https://github.com/47ng/session-keystore"
   },
   "keywords": [
-    "boilerplate",
-    "template"
+    "key-storage",
+    "session-storage"
   ],
   "publishConfig": {
     "access": "public"
@@ -28,6 +28,10 @@
     "build:ts": "tsc",
     "build": "run-s build:clean build:ts",
     "ci": "run-s test build"
+  },
+  "dependencies": {
+    "@stablelib/base64": "^0.7.2",
+    "@stablelib/utf8": "^0.10.1"
   },
   "devDependencies": {
     "@types/jest": "^24.0.23",
@@ -46,9 +50,5 @@
   },
   "husky": {
     "pre-push": "run-s test build"
-  },
-  "dependencies": {
-    "@stablelib/base64": "^0.7.2",
-    "@stablelib/utf8": "^0.10.1"
   }
 }
