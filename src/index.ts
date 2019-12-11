@@ -10,6 +10,8 @@ export interface Spies<KeyName> {
   onExpired?: (keyName: KeyName) => void
 }
 
+const windowGlobal = typeof window === 'undefined' ? global : window
+
 const stores = new Map()
 
 type Store<KeyName> = Map<KeyName, ExpirableKey>
@@ -19,8 +21,7 @@ const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
 }
 
 export default class SessionKeystore<KeyName = string> {
-  // private _store: Map<KeyName, ExpirableKey>
-  private _timeouts: Map<KeyName, number>
+  private _timeouts: Map<KeyName, any>
   private _spies: Map<KeyName, Spies<KeyName>>
   private readonly _storageKey: string
 
@@ -29,10 +30,12 @@ export default class SessionKeystore<KeyName = string> {
     stores.set(this._storageKey, new Map())
     this._timeouts = new Map()
     this._spies = new Map()
-    try {
-      this._load()
-    } catch {}
-    window.addEventListener('unload', this._save.bind(this))
+    if (typeof window !== 'undefined') {
+      try {
+        this._load()
+      } catch {}
+      window.addEventListener('unload', this._save.bind(this))
+    }
   }
 
   public set(
@@ -131,7 +134,7 @@ export default class SessionKeystore<KeyName = string> {
       this.delete(keyName)
       return
     }
-    const t = window.setTimeout(() => {
+    const t = windowGlobal.setTimeout(() => {
       this.delete(keyName)
     }, timeout)
     this._timeouts.set(keyName, t)
@@ -139,7 +142,7 @@ export default class SessionKeystore<KeyName = string> {
 
   private _clearTimeout(keyName: KeyName) {
     const timeoutId = this._timeouts.get(keyName)
-    window.clearTimeout(timeoutId as number)
+    windowGlobal.clearTimeout(timeoutId)
     this._timeouts.delete(keyName)
   }
 }
