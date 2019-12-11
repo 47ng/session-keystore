@@ -38,7 +38,7 @@ const otherStore = new SessionKeystore('other')
 // Save a session-bound key
 store.set('foo', 'supersecret')
 
-// Set an expiration date (Date or number of ms)
+// Set an expiration date (Date or timestamp in ms)
 store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5) // 5 minutes
 
 // Retrieve the key
