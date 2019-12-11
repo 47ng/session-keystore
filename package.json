@@ -1,5 +1,5 @@
 {
-  "name": "typescript-library-starter",
+  "name": "session-keystore",
   "version": "0.1.0",
   "description": "Template repository for TypeScript libraries",
   "main": "dist/index.js",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/47ng/typescript-library-starter"
+    "url": "https://github.com/47ng/session-keystore"
   },
   "keywords": [
     "boilerplate",
