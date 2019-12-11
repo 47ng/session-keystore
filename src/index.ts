@@ -15,7 +15,7 @@ const stores = new Map()
 type Store<KeyName> = Map<KeyName, ExpirableKey>
 
 const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
-  return getStore(storageKey)
+  return stores.get(storageKey)
 }
 
 export default class SessionKeystore<KeyName = string> {
