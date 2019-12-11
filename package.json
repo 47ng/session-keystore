@@ -1,6 +1,6 @@
 {
   "name": "session-keystore",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Secure cryptographic key storage in the browser",
   "main": "dist/index.js",
   "license": "MIT",
