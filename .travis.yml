@@ -1,4 +1,5 @@
 language: node_js
+version: 1.0
 
 node_js:
   - node
@@ -9,6 +10,7 @@ script:
   - yarn ci
 
 deploy:
+  edge: true
   provider: npm
   email: accounts@francoisbest.com
   api_key:
