@@ -13,6 +13,7 @@ Secure cryptographic key storage in the browser.
 - Session-bound (deleted when closing tab/window)
 - Survives hard-reloads of the page
 - Optional expiration dates
+- Notification callbacks on key access and key expiration
 
 ## Installation
 
@@ -31,7 +32,7 @@ import SessionKeystore from 'session-keystore'
 const store = new SessionKeystore()
 
 // You can create multiple stores, but give them a unique name:
-// (default name is 'session-keystore')
+// (default name is 'default')
 const otherStore = new SessionKeystore('other')
 
 // Save a session-bound key
@@ -57,7 +58,7 @@ typedStore.get('foo') // ok
 typedStore.get('bar') // ok
 typedStore.get('egg') // Error: Argument of type '"egg"' is not assignable to parameter of type '"foo" | "bar"'
 
-// Add spies for key access and expiration
+// Add notification callbacks for key access and expiration
 store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5, {
   onAccess: (keyName, callStack) => console.dir({ keyName, callStack }),
   onExpired: keyName => console.warn(keyName, 'has expired')
@@ -66,8 +67,7 @@ store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5, {
 
 ## How it works
 
-Heavily inspired from ProtonMail's Secure Session Storage
-https://github.com/ProtonMail/proton-shared/blob/master/lib/helpers/secureSessionStorage.js#L7
+Heavily inspired from [ProtonMail's Secure Session Storage](https://github.com/ProtonMail/proton-shared/blob/master/lib/helpers/secureSessionStorage.js#L7).
 
 ## License
 
