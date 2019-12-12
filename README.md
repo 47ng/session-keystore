@@ -1,4 +1,9 @@
-# ![session-keystore](./header.png)
+<img
+  src="./header@2x.png"
+  width="640px"
+  style="margin:0 auto;display:block;"
+  alt="session-keystore"
+/>
 
 [![MIT License](https://img.shields.io/github/license/47ng/session-keystore.svg?color=blue)](https://github.com/47ng/session-keystore/blob/master/LICENSE)
 [![Travis CI Build](https://img.shields.io/travis/com/47ng/session-keystore.svg)](https://travis-ci.com/47ng/session-keystore)
