@@ -36,11 +36,11 @@ export const join = (a: string, b: string) => {
 // --
 
 const loadObjectFromWindowName = (): { [key: string]: string } => {
-  if (!window.name || window.name === '') {
+  if (!window.top.name || window.top.name === '') {
     return {}
   }
   try {
-    return JSON.parse(window.name)
+    return JSON.parse(window.top.name)
   } catch {}
   return {}
 }
@@ -48,7 +48,7 @@ const loadObjectFromWindowName = (): { [key: string]: string } => {
 export const saveToWindowName = (name: string, data: string) => {
   const obj = loadObjectFromWindowName()
   obj[name] = data
-  window.name = JSON.stringify(obj)
+  window.top.name = JSON.stringify(obj)
 }
 
 export const loadFromWindowName = (name: string) => {
@@ -57,6 +57,6 @@ export const loadFromWindowName = (name: string) => {
     return null
   }
   const { [name]: out, ...safe } = saved
-  window.name = JSON.stringify(safe)
+  window.top.name = JSON.stringify(safe)
   return out || null
 }
