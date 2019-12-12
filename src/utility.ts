@@ -57,6 +57,7 @@ export const loadFromWindowName = (name: string) => {
     return null
   }
   const { [name]: out, ...safe } = saved
-  window.top.name = JSON.stringify(safe)
+  const json = JSON.stringify(safe)
+  window.top.name = json === '{}' ? '' : json
   return out || null
 }
