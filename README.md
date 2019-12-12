@@ -1,7 +1,6 @@
 <img
   src="./header@2x.png"
   width="640px"
-  style="margin:0 auto;display:block;"
   alt="session-keystore"
 />
 
