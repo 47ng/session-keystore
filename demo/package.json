@@ -1,0 +1,21 @@
+{
+  "name": "session-keystore-demo",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.html",
+  "license": "MIT",
+  "scripts": {
+    "build": "parcel build ./index.html",
+    "start": "serve ./dist"
+  },
+  "dependencies": {
+    "parcel-bundler": "^1.12.4",
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "serve": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^16.9.16",
+    "@types/react-dom": "^16.9.4"
+  }
+}

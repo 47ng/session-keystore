@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "jsx": "react",
     "baseUrl": ".",
     "target": "es2018",
     "module": "commonjs",
@@ -30,5 +31,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "exclude": ["./src/**/*.test.ts", "./dist", "./node_modules", "./demo"]
+  "exclude": ["./src/**/*.test.ts", "./dist", "./node_modules"]
 }
