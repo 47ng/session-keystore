@@ -1,5 +1,5 @@
 <img
-  src="./header@2x.png"
+  src="./img/header@2x.png"
   width="640px"
   alt="session-keystore"
 />
