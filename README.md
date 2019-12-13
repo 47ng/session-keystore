@@ -9,7 +9,7 @@
 [![Average issue resolution time](https://isitmaintained.com/badge/resolution/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 [![Number of open issues](https://isitmaintained.com/badge/open/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 
-Secure cryptographic key storage in the browser.
+Secure cryptographic key storage in the browser and Node.js
 
 Ideal to store keys derived from user credentials (username/password) in
 E2EE applications.
@@ -17,8 +17,8 @@ E2EE applications.
 ## Features
 
 - In-memory storage: no clear-text persistance to disk
-- Session-bound: cleared when closing tab/window
-- Survives hard-reloads of the page
+- Session-bound: cleared when closing tab/window (browser-only)
+- Survives hard-reloads of the page (browser-only)
 - Optional expiration dates
 - Notification callbacks on key access and key expiration
 
