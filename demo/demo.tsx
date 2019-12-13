@@ -1,39 +1,35 @@
 import React from 'react'
 import { render } from 'react-dom'
-import SessionKeystore from '../src'
+import { useSessionKey } from './hooks'
 
 const Demo = () => {
-  const { 1: trigger } = React.useState(0)
-
-  const store = React.useMemo(() => {
-    return new SessionKeystore('demo', {
-      onChanged: () => {
-        console.log('onChanged')
-        trigger(Math.random()) // Force re-render
-      },
-      onExpired: () => {
-        console.log('onExpired')
-        trigger(Math.random()) // Force re-render
-      }
-    })
-  }, [])
+  const [foo, { set: setFoo, del: deleteFoo }] = useSessionKey('foo')
+  const [bar, { set: setBar, del: deleteBar }] = useSessionKey('bar')
 
   return (
     <>
-      <button onClick={() => store.set('foo', Math.random().toString())}>
+      <button onClick={() => setFoo(Math.random().toString())}>
         Set key `foo`
       </button>
-      <button onClick={() => store.set('bar', Math.random().toString())}>
+      <button
+        onClick={() => setBar(Math.random().toString(), Date.now() + 3000)}
+      >
         Set key `bar`
       </button>
-      <button onClick={() => store.clear()}>Clear keys</button>
+      <button
+        onClick={() => {
+          deleteFoo()
+          deleteBar()
+        }}
+      >
+        Clear keys
+      </button>
       <button onClick={() => location.reload()}>Reload</button>
       <button onClick={() => location.reload(true)}>Force reload</button>
-
       <pre>
-        Key foo: {JSON.stringify(store.get('foo'))}
+        Key foo: {JSON.stringify(foo)}
         <br />
-        Key bar: {JSON.stringify(store.get('bar'))}
+        Key bar: {JSON.stringify(bar)}
       </pre>
     </>
   )
