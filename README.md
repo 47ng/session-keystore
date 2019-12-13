@@ -20,7 +20,7 @@ E2EE applications.
 - Session-bound: cleared when closing tab/window (browser-only)
 - Survives hard-reloads of the page (browser-only)
 - Optional expiration dates
-- Notification callbacks on key access and key expiration
+- Notification callbacks on key access, change and expiration
 
 ## Installation
 
