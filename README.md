@@ -40,7 +40,7 @@ const store = new SessionKeystore()
 
 // You can create multiple stores, but give them a unique name:
 // (default name is 'default')
-const otherStore = new SessionKeystore('other')
+const otherStore = new SessionKeystore({ name: 'other' })
 
 // Save a session-bound key
 store.set('foo', 'supersecret')
@@ -57,11 +57,26 @@ store.delete('foo')
 
 // Clear all keys in storage
 store.clear()
+```
 
-// Add notification callbacks for key access and expiration
-store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5, {
-  onAccess: (keyName, callStack) => console.dir({ keyName, callStack }),
-  onExpired: keyName => console.warn(keyName, 'has expired')
+## Notification callbacks
+
+Pass callbacks to be notified on key access, change or expiration:
+
+```ts
+import SessionKeystore from 'session-keystore'
+
+const store = new SessionKeystore({
+  name: 'my-store',
+  onAccess: (keyName: string, callStack?: string) => {
+    console.info('Key access:', keyName, callStack)
+  },
+  onChanged: (keyName: string, callStack?: string) => {
+    console.warn('Key changed:', keyName, callStack)
+  },
+  onExpired: (keyName: string) => {
+    console.warn('Key has expired:', keyName)
+  }
 })
 ```
 

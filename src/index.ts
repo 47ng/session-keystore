@@ -1,20 +1,27 @@
 import { split, saveToWindowName, loadFromWindowName, join } from './utility'
 
 interface ExpirableKey {
-  key: string
-  expiresAt?: number // timestamp
+  readonly key: string
+  readonly expiresAt?: number // timestamp
 }
 
-export interface Spies<KeyName> {
+export interface Callbacks<KeyName> {
   onAccess?: (keyName: KeyName, stackTrace?: string) => void
+  onChanged?: (keyName: KeyName, stackTrace?: string) => void
   onExpired?: (keyName: KeyName) => void
 }
+
+export interface ConstructorOptions<KeyName> extends Callbacks<KeyName> {
+  name?: string
+}
+
+type Store<KeyName> = Map<KeyName, ExpirableKey>
+
+// --
 
 const windowGlobal = typeof window === 'undefined' ? global : window
 
 const stores = new Map()
-
-type Store<KeyName> = Map<KeyName, ExpirableKey>
 
 const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
   return stores.get(storageKey)
@@ -22,14 +29,15 @@ const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
 
 export default class SessionKeystore<KeyName = string> {
   private _timeouts: Map<KeyName, any>
-  private _spies: Map<KeyName, Spies<KeyName>>
+  private readonly _callbacks: Callbacks<KeyName>
   private readonly _storageKey: string
 
-  constructor(name: string = 'default') {
-    this._storageKey = `session-keystore:${name}`
+  constructor(options: ConstructorOptions<KeyName> = {}) {
+    const { name, ...callbacks } = options
+    this._storageKey = `session-keystore:${name || 'default'}`
     stores.set(this._storageKey, new Map())
     this._timeouts = new Map()
-    this._spies = new Map()
+    this._callbacks = callbacks
     if (typeof window !== 'undefined') {
       try {
         this._load()
@@ -38,12 +46,7 @@ export default class SessionKeystore<KeyName = string> {
     }
   }
 
-  public set(
-    keyName: KeyName,
-    key: string,
-    expiresAt?: Date | number,
-    spies: Spies<KeyName> = {}
-  ) {
+  public set(keyName: KeyName, key: string, expiresAt?: Date | number) {
     let d: number | undefined
     if (expiresAt) {
       d = typeof expiresAt === 'number' ? expiresAt : expiresAt.getTime()
@@ -53,9 +56,14 @@ export default class SessionKeystore<KeyName = string> {
       expiresAt: d
     }
     this._clearTimeout(keyName)
+    const oldKey = getStore(this._storageKey).get(keyName)
     getStore(this._storageKey).set(keyName, value)
-    this._spies.set(keyName, spies)
     this._setTimeout(keyName)
+    if (oldKey?.key !== key && this._callbacks.onChanged) {
+      // Not actually an error, we just need the stack trace.
+      const e = new Error('Key changed')
+      this._callbacks.onChanged(keyName, e.stack)
+    }
   }
 
   public get(keyName: KeyName, now = Date.now()) {
@@ -67,12 +75,10 @@ export default class SessionKeystore<KeyName = string> {
       this.delete(keyName)
       return null
     }
-    const spies = this._spies.get(keyName)
-    if (spies && spies.onAccess) {
-      // Not actually an error,
-      // we just need the stack trace.
+    if (this._callbacks.onAccess) {
+      // Not actually an error, we just need the stack trace.
       const e = new Error('Key access')
-      spies.onAccess(keyName, e.stack)
+      this._callbacks.onAccess(keyName, e.stack)
     }
     return obj.key
   }
@@ -80,9 +86,8 @@ export default class SessionKeystore<KeyName = string> {
   public delete(keyName: KeyName) {
     this._clearTimeout(keyName)
     getStore(this._storageKey).delete(keyName)
-    const spies = this._spies.get(keyName)
-    if (spies && spies.onExpired) {
-      spies.onExpired(keyName)
+    if (this._callbacks.onExpired) {
+      this._callbacks.onExpired(keyName)
     }
   }
 
