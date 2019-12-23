@@ -50,5 +50,8 @@
   },
   "husky": {
     "pre-push": "run-s test build"
+  },
+  "browser": {
+    "crypto": false
   }
 }
