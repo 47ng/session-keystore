@@ -13,3 +13,13 @@ describe('Node tests', () => {
     expect(store.get('bar')).toEqual(null)
   })
 })
+
+test('key expiration', () => {
+  jest.useFakeTimers()
+  const onExpired = jest.fn()
+  const store = new SessionKeystore({ onExpired })
+  store.set('foo', 'foo', new Date().getTime() + 1000)
+  jest.advanceTimersByTime(1000)
+  expect(onExpired).toHaveBeenCalledWith('foo')
+  expect(store.get('foo')).toBeNull()
+})

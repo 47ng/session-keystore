@@ -19,8 +19,6 @@ type Store<KeyName> = Map<KeyName, ExpirableKey>
 
 // --
 
-const windowGlobal = typeof window === 'undefined' ? global : window
-
 const stores = new Map()
 
 const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
@@ -139,7 +137,7 @@ export default class SessionKeystore<KeyName = string> {
       this.delete(keyName)
       return
     }
-    const t = windowGlobal.setTimeout(() => {
+    const t = setTimeout(() => {
       this.delete(keyName)
     }, timeout)
     this._timeouts.set(keyName, t)
@@ -147,7 +145,7 @@ export default class SessionKeystore<KeyName = string> {
 
   private _clearTimeout(keyName: KeyName) {
     const timeoutId = this._timeouts.get(keyName)
-    windowGlobal.clearTimeout(timeoutId)
+    clearTimeout(timeoutId)
     this._timeouts.delete(keyName)
   }
 }
