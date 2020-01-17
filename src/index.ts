@@ -40,7 +40,7 @@ export default class SessionKeystore<KeyName = string> {
       try {
         this._load()
       } catch {}
-      window.addEventListener('unload', this._save.bind(this))
+      window.addEventListener('unload', this.persist.bind(this))
     }
   }
 
@@ -97,7 +97,7 @@ export default class SessionKeystore<KeyName = string> {
 
   // --
 
-  private _save() {
+  public persist() {
     const json = JSON.stringify(
       Array.from(getStore(this._storageKey).entries())
     )
