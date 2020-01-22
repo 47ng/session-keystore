@@ -49,7 +49,9 @@
     "testEnvironment": "node"
   },
   "husky": {
-    "pre-push": "run-s test build"
+    "hooks": {
+      "pre-push": "yarn ci"
+    }
   },
   "browser": {
     "crypto": false
