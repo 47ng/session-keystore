@@ -4,8 +4,10 @@
   alt="session-keystore"
 />
 
+[![NPM](https://img.shields.io/npm/v/session-keystore?color=red)](https://www.npmjs.com/package/session-keystore)
 [![MIT License](https://img.shields.io/github/license/47ng/session-keystore.svg?color=blue)](https://github.com/47ng/session-keystore/blob/master/LICENSE)
 [![Travis CI Build](https://img.shields.io/travis/com/47ng/session-keystore.svg)](https://travis-ci.com/47ng/session-keystore)
+[![Dependabot Status](https://api.dependabot.com/badges/status?host=github&repo=47ng/session-keystore)](https://dependabot.com)
 [![Average issue resolution time](https://isitmaintained.com/badge/resolution/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 [![Number of open issues](https://isitmaintained.com/badge/open/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 
