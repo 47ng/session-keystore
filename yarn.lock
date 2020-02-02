@@ -2,6 +2,14 @@
 # yarn lockfile v1
 
 
+"@47ng/codec@^0.4.0":
+  version "0.4.0"
+  resolved "https://registry.yarnpkg.com/@47ng/codec/-/codec-0.4.0.tgz#27322699f285d8ce6dfa124f7785b7c70570cffa"
+  integrity sha512-3PBp7/MQHaukgmsAm2+++sQ14zg3ywJjkCJwbiw8W16ZR7CTsDw18IRRaeze3U2DanOeg7ImTTFaIdvTaUhMxA==
+  dependencies:
+    "@stablelib/base64" "^1.0.0"
+    "@stablelib/hex" "^1.0.0"
+
 "@babel/code-frame@^7.0.0", "@babel/code-frame@^7.5.5":
   version "7.5.5"
   resolved "https://registry.yarnpkg.com/@babel/code-frame/-/code-frame-7.5.5.tgz#bc0782f6d69f7b7d49531219699b988f669a8f9d"
@@ -465,10 +473,10 @@
   resolved "https://registry.yarnpkg.com/@stablelib/base64/-/base64-1.0.0.tgz#e08ba78078c731cbbb244530b1750659c52ba7cb"
   integrity sha512-s/wTc/3+vYSalh4gfayJrupzhT7SDBqNtiYOeEMlkSDqL/8cExh5FAeTzLpmYq+7BLLv36EjBL5xrb0bUHWJWQ==
 
-"@stablelib/utf8@^1.0.0":
+"@stablelib/hex@^1.0.0":
   version "1.0.0"
-  resolved "https://registry.yarnpkg.com/@stablelib/utf8/-/utf8-1.0.0.tgz#7c0c039b6d154da50326003ea92777ddc8f5db2c"
-  integrity sha512-Y8QWrK4T0yW0HMFfSI3ZaMHKV37q27hX5ilsmKV358x01mzYfj5fwIf2LjzTlF+UIemHEXSlSN9XJnv1ML4znQ==
+  resolved "https://registry.yarnpkg.com/@stablelib/hex/-/hex-1.0.0.tgz#9f2d21d412803e72a3bbc0ab4690e9bda0ca91cf"
+  integrity sha512-EJ9oGiuaFw/Y0cBATTxo73sgqOgdnSmZ9ftU9FND9SD51OM8wvAfS78uPy3oBNmLWc/sZK5twMbEFf/A4T2F8A==
 
 "@types/babel__core@^7.1.0":
   version "7.1.3"

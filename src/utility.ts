@@ -1,5 +1,4 @@
-import { encode as encodeUtf8, decode as decodeUtf8 } from '@stablelib/utf8'
-import { encodeURLSafe, decodeURLSafe } from '@stablelib/base64'
+import { b64, utf8 } from '@47ng/codec'
 
 const randomBytes = (length: number): Uint8Array => {
   if (typeof window === 'undefined') {
@@ -10,27 +9,27 @@ const randomBytes = (length: number): Uint8Array => {
   }
 }
 
-export const split = (secret: string) => {
-  const buff = encodeUtf8(secret)
+export const split = (secret: string): string[] => {
+  const buff = utf8.encode(secret)
   const rand1 = randomBytes(buff.length)
   const rand2 = new Uint8Array(rand1) // Make a copy
   for (const i in buff) {
     rand2[i] = rand2[i] ^ buff[i]
   }
-  return [encodeURLSafe(rand1), encodeURLSafe(rand2)]
+  return [b64.encode(rand1), b64.encode(rand2)]
 }
 
 export const join = (a: string, b: string) => {
   if (a.length !== b.length) {
     return null
   }
-  const aBuff = decodeURLSafe(a)
-  const bBuff = decodeURLSafe(b)
+  const aBuff = b64.decode(a)
+  const bBuff = b64.decode(b)
   const output = new Uint8Array(aBuff.length)
   for (const i in output) {
     output[i] = aBuff[i] ^ bBuff[i]
   }
-  return decodeUtf8(output)
+  return utf8.decode(output)
 }
 
 // --
