@@ -103,7 +103,7 @@ This can be handy if you have multiple stores, to avoid accidental key leakage.
 Heavily inspired from the [Secure Session Storage](https://github.com/ProtonMail/proton-shared/blob/master/lib/helpers/secureSessionStorage.js#L7) implementation by [ProtonMail](https://protonmail.com),
 itself inspired from Thomas Frank's [SessionVars](https://www.thomasfrank.se/sessionvars.html).
 
-Read the [writeup article on dev.to](https://dev.to/franky47/how-to-store-e2ee-keys-in-the-browser-2550).
+Read the [writeup article](https://francoisbest.com/posts/2019/how-to-store-e2ee-keys-in-the-browser) on [my blog](https://francoisbest.com/posts).
 
 From the ProtonMail documentation:
 
