@@ -6,10 +6,9 @@
 
 [![NPM](https://img.shields.io/npm/v/session-keystore?color=red)](https://www.npmjs.com/package/session-keystore)
 [![MIT License](https://img.shields.io/github/license/47ng/session-keystore.svg?color=blue)](https://github.com/47ng/session-keystore/blob/master/LICENSE)
-[![Travis CI Build](https://img.shields.io/travis/com/47ng/session-keystore.svg)](https://travis-ci.com/47ng/session-keystore)
+[![Continuous Integration](https://github.com/47ng/session-keystore/workflows/Continuous%20Integration/badge.svg?branch=next)](https://github.com/47ng/session-keystore/actions)
+[![Coverage Status](https://coveralls.io/repos/github/47ng/session-keystore/badge.svg?branch=next)](https://coveralls.io/github/47ng/session-keystore?branch=next)
 [![Dependabot Status](https://api.dependabot.com/badges/status?host=github&repo=47ng/session-keystore)](https://dependabot.com)
-[![Average issue resolution time](https://isitmaintained.com/badge/resolution/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
-[![Number of open issues](https://isitmaintained.com/badge/open/47ng/session-keystore.svg)](https://isitmaintained.com/project/47ng/session-keystore)
 
 Secure cryptographic key storage in the browser and Node.js
 
@@ -22,7 +21,7 @@ E2EE applications.
 - Session-bound: cleared when closing tab/window (browser-only)
 - Survives hard-reloads of the page (browser-only)
 - Optional expiration dates
-- Notification callbacks on key access, change and expiration
+- Event emitter API for key CRUD operations
 
 ## Installation
 
@@ -61,26 +60,34 @@ store.delete('foo')
 store.clear()
 ```
 
-## Notification callbacks
+## CRUD Event Emitter
 
-Pass callbacks to be notified on key access, change or expiration:
+Event types:
+
+- `created`
+- `read`
+- `updated`
+- `deleted`
+- `expired`
+
+Listen to events on a keystore with the `on` method:
 
 ```ts
 import SessionKeystore from 'session-keystore'
 
-const store = new SessionKeystore({
-  name: 'my-store',
-  onAccess: (keyName: string, callStack?: string) => {
-    console.info('Key access:', keyName, callStack)
-  },
-  onChanged: (keyName: string, callStack?: string) => {
-    console.warn('Key changed:', keyName, callStack)
-  },
-  onExpired: (keyName: string) => {
-    console.warn('Key has expired:', keyName)
-  }
-})
+const store = new SessionKeystore()
+store.on('created', ({ name }) => console.log('Key created: ', name))
+store.on('updated', ({ name }) => console.log('Key updated: ', name))
+store.on('deleted', ({ name }) => console.log('Key deleted: ', name))
+store.on('expired', ({ name }) => console.log('Key expired: ', name))
+store.on('read', ({ name }) => console.log('Key accessed: ', name))
 ```
+
+Note: `deleted` will be called when the key has been manually deleted,
+and `expired` when its expiration date has arrived.
+
+When setting a key that is already expired, `created` or `updated` will
+NOT be called, and `expired` will be called instead.
 
 ## TypeScript
 

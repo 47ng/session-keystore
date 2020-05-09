@@ -1,41 +1,71 @@
+import mitt, { Emitter } from 'mitt'
 import { split, saveToWindowName, loadFromWindowName, join } from './utility'
 
-interface ExpirableKey {
+interface ExpirableKeyV0 {
   readonly key: string
   readonly expiresAt?: number // timestamp
 }
 
-export interface Callbacks<KeyName> {
-  onAccess?: (keyName: KeyName, stackTrace?: string) => void
-  onChanged?: (keyName: KeyName, stackTrace?: string) => void
-  onExpired?: (keyName: KeyName) => void
+interface ExpirableKeyV1 {
+  v: 1
+  readonly value: string
+  readonly expiresAt?: number // timestamp
 }
 
-export interface ConstructorOptions<KeyName> extends Callbacks<KeyName> {
-  name?: string
+const isExpirableKeyV0 = (entry: any): entry is ExpirableKeyV0 => {
+  return entry.v === undefined && !!entry.key
+}
+const isExpirableKeyV1 = (entry: any): entry is ExpirableKeyV1 => {
+  return entry.v === 1 && !!entry.value
 }
 
-type Store<KeyName> = Map<KeyName, ExpirableKey>
+const convertV0toV1 = (v0Entry: ExpirableKeyV0): ExpirableKeyV1 => ({
+  v: 1,
+  value: v0Entry.key,
+  expiresAt: v0Entry.expiresAt
+})
 
 // --
 
-const stores = new Map()
-
-const getStore = <KeyName>(storageKey: string): Store<KeyName> => {
-  return stores.get(storageKey)
+export interface KeyEvent {
+  name: string
 }
 
-export default class SessionKeystore<KeyName = string> {
-  private _timeouts: Map<KeyName, any>
-  private readonly _callbacks: Callbacks<KeyName>
-  private readonly _storageKey: string
+export interface EventMap {
+  created: KeyEvent
+  read: KeyEvent
+  updated: KeyEvent
+  deleted: KeyEvent
+  expired: KeyEvent
+}
 
-  constructor(options: ConstructorOptions<KeyName> = {}) {
-    const { name, ...callbacks } = options
-    this._storageKey = `session-keystore:${name || 'default'}`
-    stores.set(this._storageKey, new Map())
-    this._timeouts = new Map()
-    this._callbacks = callbacks
+export type EventTypes = keyof EventMap
+export type EventPayload<T extends EventTypes> = EventMap[T]
+export type Callback<T extends EventTypes> = (value: T) => void
+
+export interface ConstructorOptions {
+  name?: string
+}
+
+// --
+
+export default class SessionKeystore<Keys = string> {
+  // Members
+  readonly name: string
+  readonly #storageKey: string
+  #emitter: Emitter
+  #store: Map<Keys, ExpirableKeyV1>
+  #timeouts: Map<Keys, any>
+
+  // --
+
+  constructor(opts: ConstructorOptions = {}) {
+    this.name = opts.name || 'default'
+    this.#storageKey = `session-keystore:${this.name}`
+    this.#emitter = mitt()
+    this.#store = new Map()
+    this.#timeouts = new Map()
+    /* istanbul ignore else */
     if (typeof window !== 'undefined') {
       try {
         this._load()
@@ -44,108 +74,140 @@ export default class SessionKeystore<KeyName = string> {
     }
   }
 
-  public set(keyName: KeyName, key: string, expiresAt?: Date | number) {
+  // Event Emitter --
+
+  // Returns an unsubscribe callback
+  on<T extends EventTypes>(event: T, callback: Callback<T>) {
+    this.#emitter.on(event, callback)
+    return () => this.#emitter.off(event, callback)
+  }
+
+  off<T extends EventTypes>(event: T, callback: Callback<T>) {
+    this.#emitter.off(event, callback)
+  }
+
+  // API --
+
+  set(key: Keys, value: string, expiresAt?: Date | number) {
     let d: number | undefined
-    if (expiresAt) {
-      d = typeof expiresAt === 'number' ? expiresAt : expiresAt.getTime()
+    if (expiresAt !== undefined) {
+      d = typeof expiresAt === 'number' ? expiresAt : expiresAt.valueOf()
     }
-    const value: ExpirableKey = {
-      key,
+    const newItem: ExpirableKeyV1 = {
+      v: 1,
+      value,
       expiresAt: d
     }
-    this._clearTimeout(keyName)
-    const oldKey = getStore(this._storageKey).get(keyName)
-    getStore(this._storageKey).set(keyName, value)
-    this._setTimeout(keyName)
-    if (oldKey?.key !== key && this._callbacks.onChanged) {
-      // Not actually an error, we just need the stack trace.
-      const e = new Error('Key changed')
-      this._callbacks.onChanged(keyName, e.stack)
+    const oldItem = this.#store.get(key)
+    this.#store.set(key, newItem)
+    if (this._setTimeout(key) === 'expired') {
+      return // Don't call created or updated
+    }
+    if (!oldItem) {
+      this.#emitter.emit('created', { name: key })
+    } else if (oldItem.value !== newItem.value) {
+      this.#emitter.emit('updated', { name: key })
     }
   }
 
-  public get(keyName: KeyName, now = Date.now()) {
-    const obj = getStore(this._storageKey).get(keyName)
-    if (!obj) {
+  get(key: Keys, now = Date.now()) {
+    const item = this.#store.get(key)
+    if (!item) {
       return null
     }
-    if (obj.expiresAt && obj.expiresAt < now) {
-      this.delete(keyName)
+    if (item.expiresAt !== undefined && item.expiresAt <= now) {
+      this._expired(key)
       return null
     }
-    if (this._callbacks.onAccess) {
-      // Not actually an error, we just need the stack trace.
-      const e = new Error('Key access')
-      this._callbacks.onAccess(keyName, e.stack)
-    }
-    return obj.key
+    this.#emitter.emit('read', { name: key })
+    return item.value
   }
 
-  public delete(keyName: KeyName) {
-    this._clearTimeout(keyName)
-    getStore(this._storageKey).delete(keyName)
-    if (this._callbacks.onExpired) {
-      this._callbacks.onExpired(keyName)
-    }
+  delete(key: Keys) {
+    this._clearTimeout(key)
+    this.#store.delete(key)
+    this.#emitter.emit('deleted', { name: key })
   }
 
-  public clear() {
-    getStore<KeyName>(this._storageKey).forEach((_, keyName) => {
-      this.delete(keyName)
-    })
+  clear() {
+    this.#store.forEach((_, key) => this.delete(key))
   }
 
   // --
 
-  public persist() {
-    const json = JSON.stringify(
-      Array.from(getStore(this._storageKey).entries())
-    )
+  persist() {
+    /* istanbul ignore next */
+    if (typeof window === 'undefined') {
+      throw new Error(
+        'SessionKeystore.persist is only available in the browser.'
+      )
+    }
+    const json = JSON.stringify(Array.from(this.#store.entries()))
     const [a, b] = split(json)
-    saveToWindowName(this._storageKey, a)
-    window.sessionStorage.setItem(this._storageKey, b)
+    saveToWindowName(this.#storageKey, a)
+    window.sessionStorage.setItem(this.#storageKey, b)
   }
 
   private _load() {
-    const a = loadFromWindowName(this._storageKey)
-    const b = window.sessionStorage.getItem(this._storageKey)
-    window.sessionStorage.removeItem(this._storageKey)
+    const a = loadFromWindowName(this.#storageKey)
+    const b = window.sessionStorage.getItem(this.#storageKey)
+    window.sessionStorage.removeItem(this.#storageKey)
     if (!a || !b) {
       return
     }
     const json = join(a, b)
+    /* istanbul ignore next */
     if (!json) {
       return
     }
-    const entries = JSON.parse(json)
-    stores.set(this._storageKey, new Map(entries))
+    const entries: [Keys, ExpirableKeyV1][] = JSON.parse(json)
+
+    this.#store = new Map(
+      entries.map(([key, item]) => {
+        if (isExpirableKeyV0(item)) {
+          return [key, convertV0toV1(item)]
+        }
+        if (isExpirableKeyV1(item)) {
+          return [key, item]
+        }
+        /* istanbul ignore next */
+        return [key, item]
+      })
+    )
     // Re-establish timeouts
-    getStore<KeyName>(this._storageKey).forEach((_, keyName) => {
-      this._setTimeout(keyName)
+    this.#store.forEach((_, key) => {
+      this._setTimeout(key)
     })
   }
 
-  private _setTimeout(keyName: KeyName) {
-    this._clearTimeout(keyName)
-    const key = getStore(this._storageKey).get(keyName)
-    if (!key || !key.expiresAt) {
+  private _setTimeout(key: Keys): 'expired' | undefined {
+    this._clearTimeout(key)
+    const keyEntry = this.#store.get(key)
+    if (keyEntry?.expiresAt === undefined) {
       return
     }
     const now = Date.now()
-    const timeout = key.expiresAt - now
+    const timeout = keyEntry.expiresAt - now
     if (timeout <= 0) {
-      this.delete(keyName)
-      return
+      this._expired(key)
+      return 'expired'
     }
     const t = setTimeout(() => {
-      this.delete(keyName)
+      this._expired(key)
     }, timeout)
-    this._timeouts.set(keyName, t)
+    this.#timeouts.set(key, t)
+    return undefined
   }
 
-  private _clearTimeout(keyName: KeyName) {
-    const timeoutId = this._timeouts.get(keyName)
+  private _clearTimeout(key: Keys) {
+    const timeoutId = this.#timeouts.get(key)
     clearTimeout(timeoutId)
-    this._timeouts.delete(keyName)
+    this.#timeouts.delete(key)
+  }
+
+  private _expired(key: Keys) {
+    this._clearTimeout(key)
+    this.#store.delete(key)
+    this.#emitter.emit('expired', { name: key })
   }
 }

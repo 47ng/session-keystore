@@ -1,6 +1,6 @@
 {
   "name": "session-keystore",
-  "version": "0.6.1",
+  "version": "0.0.0-semantically-released",
   "description": "Secure cryptographic key storage in the browser",
   "main": "dist/index.js",
   "license": "MIT",
@@ -21,38 +21,83 @@
     "access": "public"
   },
   "scripts": {
-    "test": "jest --verbose",
-    "test:watch": "jest --verbose --watch",
-    "dev": "nodemon -e ts,.env -w .env -w . -x 'run-s build:ts test'",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
     "build:clean": "rm -rf ./dist",
     "build:ts": "tsc",
     "build": "run-s build:clean build:ts",
-    "ci": "run-s test build"
+    "ci": "run-s build test"
   },
   "dependencies": {
-    "@47ng/codec": "^1.0.0"
+    "@47ng/codec": "^1.0.0",
+    "mitt": "^1.2.0"
   },
   "devDependencies": {
-    "@types/jest": "^25.1.0",
-    "@types/node": "^13.1.8",
-    "husky": "^4.0.10",
-    "jest": "^25.1.0",
-    "nodemon": "^2.0.2",
+    "@commitlint/config-conventional": "^8.3.4",
+    "@types/jest": "^25.2.1",
+    "@types/node": "^13.13.5",
+    "commitlint": "^8.3.5",
+    "husky": "^4.2.5",
+    "jest": "^26.0.1",
     "npm-run-all": "^4.1.5",
-    "ts-jest": "^25.0.0",
-    "ts-node": "^8.6.2",
-    "typescript": "^3.7.5"
-  },
-  "jest": {
-    "preset": "ts-jest/presets/js-with-ts",
-    "testEnvironment": "node"
-  },
-  "husky": {
-    "hooks": {
-      "pre-push": "yarn ci"
-    }
+    "ts-jest": "^25.5.1",
+    "ts-node": "^8.10.1",
+    "typescript": "^3.8.3"
   },
   "browser": {
     "crypto": false
+  },
+  "jest": {
+    "verbose": true,
+    "preset": "ts-jest/presets/js-with-ts",
+    "testEnvironment": "./test/browser.env.js"
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "none",
+    "useTabs": false
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "type-enum": [
+        2,
+        "always",
+        [
+          "build",
+          "chore",
+          "ci",
+          "clean",
+          "doc",
+          "feat",
+          "fix",
+          "perf",
+          "ref",
+          "revert",
+          "style",
+          "test"
+        ]
+      ],
+      "subject-case": [
+        0,
+        "always",
+        "sentence-case"
+      ],
+      "body-leading-blank": [
+        2,
+        "always",
+        true
+      ]
+    }
   }
 }
