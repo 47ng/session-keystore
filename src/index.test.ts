@@ -95,6 +95,17 @@ describe('Event handlers', () => {
     store.get('foo')
     expect(read).toHaveBeenCalledTimes(1)
   })
+
+  test('By default, this is not bound to the store', () => {
+    const store = new SK()
+    const nobind = jest.fn().mockReturnThis()
+    const bind = jest.fn().mockReturnThis()
+    store.on('created', nobind)
+    store.on('created', bind.bind(store))
+    store.set('foo', 'bar')
+    expect(bind.mock.results[0].value).toEqual(store)
+    expect(nobind.mock.results[0].value).toBeUndefined()
+  })
 })
 
 test('Clear', () => {
