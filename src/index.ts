@@ -27,21 +27,23 @@ const convertV0toV1 = (v0Entry: ExpirableKeyV0): ExpirableKeyV1 => ({
 
 // --
 
-export interface KeyEvent {
-  name: string
+export interface KeyEvent<Keys> {
+  name: Keys
 }
 
-export interface EventMap {
-  created: KeyEvent
-  read: KeyEvent
-  updated: KeyEvent
-  deleted: KeyEvent
-  expired: KeyEvent
+export interface EventMap<Keys> {
+  created: KeyEvent<Keys>
+  read: KeyEvent<Keys>
+  updated: KeyEvent<Keys>
+  deleted: KeyEvent<Keys>
+  expired: KeyEvent<Keys>
 }
 
-export type EventTypes = keyof EventMap
-export type EventPayload<T extends EventTypes> = EventMap[T]
-export type Callback<T extends EventTypes> = (value: T) => void
+export type EventTypes<Keys> = keyof EventMap<Keys>
+export type EventPayload<Keys, T extends EventTypes<Keys>> = EventMap<Keys>[T]
+export type Callback<Keys, T extends EventTypes<Keys>> = (
+  value: EventPayload<Keys, T>
+) => void
 
 export interface ConstructorOptions {
   name?: string
@@ -77,12 +79,12 @@ export default class SessionKeystore<Keys = string> {
   // Event Emitter --
 
   // Returns an unsubscribe callback
-  on<T extends EventTypes>(event: T, callback: Callback<T>) {
+  on<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
     this.#emitter.on(event, callback)
     return () => this.#emitter.off(event, callback)
   }
 
-  off<T extends EventTypes>(event: T, callback: Callback<T>) {
+  off<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
     this.#emitter.off(event, callback)
   }
 
