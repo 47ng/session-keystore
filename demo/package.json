@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "parcel-bundler": "^1.12.4",
-    "react": "^16.13.1",
+    "react": "^16.14.0",
     "react-dom": "^16.13.1",
     "serve": "^11.3.2"
   },
