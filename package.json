@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@47ng/codec": "^1.0.0",
-    "mitt": "^1.2.0"
+    "mitt": "^2.1.0"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^9.1.1",
