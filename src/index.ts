@@ -80,12 +80,12 @@ export default class SessionKeystore<Keys = string> {
 
   // Returns an unsubscribe callback
   on<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
-    this.#emitter.on(event, callback)
-    return () => this.#emitter.off(event, callback)
+    this.#emitter.on(event, callback as any)
+    return () => this.#emitter.off(event, callback as any)
   }
 
   off<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
-    this.#emitter.off(event, callback)
+    this.#emitter.off(event, callback as any)
   }
 
   // API --
