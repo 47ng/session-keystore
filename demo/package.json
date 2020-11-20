@@ -15,7 +15,7 @@
     "serve": "^11.3.2"
   },
   "devDependencies": {
-    "@types/react": "^16.14.0",
+    "@types/react": "^17.0.0",
     "@types/react-dom": "^16.9.9"
   }
 }
