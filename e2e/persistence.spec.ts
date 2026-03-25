@@ -12,8 +12,8 @@ test.describe('Persistence across page refresh', () => {
       ;(window as any).store.set('test-key', 'hello-world')
     })
 
-    // Wait for debounce to flush window.name (50ms + buffer)
-    await page.waitForTimeout(200)
+    // Wait for share1 to be written to window.name
+    await page.waitForFunction(() => window.name !== '')
 
     // Reload the page — triggers pagehide, then fresh load
     await page.reload()
@@ -37,7 +37,7 @@ test.describe('Persistence across page refresh', () => {
       store.set('key-c', 'value-c')
     })
 
-    await page.waitForTimeout(200)
+    await page.waitForFunction(() => window.name !== '')
     await page.reload()
     await page.waitForSelector('#status')
 
@@ -67,7 +67,7 @@ test.describe('Persistence across page refresh', () => {
     await page1.evaluate(() => {
       ;(window as any).store.set('secret', 'should-not-leak')
     })
-    await page1.waitForTimeout(200)
+    await page1.waitForFunction(() => window.name !== '')
     await context1.close()
 
     // Second context: key should not be available
@@ -90,10 +90,7 @@ test.describe('Persistence across page refresh', () => {
       ;(window as any).store.set('eager-key', 'eager-value')
     })
 
-    // Wait for debounce
-    await page.waitForTimeout(200)
-
-    // Check that window.name has data (phase 1 completed)
+    // Check that window.name has data (phase 1 is immediate, no debounce)
     const windowName = await page.evaluate(() => window.name)
     expect(windowName).not.toBe('')
 

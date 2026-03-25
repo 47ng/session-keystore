@@ -58,8 +58,8 @@ export default class SessionKeystore<Keys = string> {
   #emitter: Emitter
   #store: Map<Keys, ExpirableKeyV1>
   #timeouts: Map<Keys, any>
-  #debounceTimer: any = null
   #pendingFinalize: (() => void) | null = null
+  #finalizeHandler: (() => void) | null = null
 
   // --
 
@@ -76,9 +76,9 @@ export default class SessionKeystore<Keys = string> {
       } catch {}
       // Phase 2: finalize on pagehide (preferred) with unload fallback.
       // Both may fire — _finalize() is idempotent.
-      const finalizeHandler = this._finalize.bind(this)
-      window.addEventListener('pagehide', finalizeHandler)
-      window.addEventListener('unload', finalizeHandler)
+      this.#finalizeHandler = this._finalize.bind(this)
+      window.addEventListener('pagehide', this.#finalizeHandler)
+      window.addEventListener('unload', this.#finalizeHandler)
     }
   }
 
@@ -157,8 +157,24 @@ export default class SessionKeystore<Keys = string> {
         'SessionKeystore.persist is only available in the browser.'
       )
     }
+    this.#pendingFinalize = null
     const finalize = this._save()
     finalize()
+  }
+
+  /**
+   * Remove event listeners and flush pending state.
+   * Call this when a store instance is no longer needed to prevent
+   * leaked listeners and competing _finalize() runs.
+   */
+  dispose() {
+    this._finalize()
+    this.#timeouts.forEach((_, key) => this._clearTimeout(key))
+    if (this.#finalizeHandler && typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.#finalizeHandler)
+      window.removeEventListener('unload', this.#finalizeHandler)
+    }
+    this.#finalizeHandler = null
   }
 
   /**
@@ -181,34 +197,24 @@ export default class SessionKeystore<Keys = string> {
   }
 
   /**
-   * Schedule a debounced phase 1 save.
-   * Called on every mutation (set, delete).
+   * Eagerly write share1 to window.name on every mutation.
+   * No debounce — writes to window.name during pagehide may not commit
+   * on Chrome 146+, so share1 must always be current before teardown.
    */
   private _scheduleEagerSave() {
     if (typeof window === 'undefined') {
       return
     }
-    if (this.#debounceTimer !== null) {
-      clearTimeout(this.#debounceTimer)
-    }
-    this.#debounceTimer = setTimeout(() => {
-      this.#debounceTimer = null
-      this.#pendingFinalize = this._save()
-    }, 50)
+    this.#pendingFinalize = this._save()
   }
 
   /**
-   * Phase 2: Flush pending saves and write share2 to sessionStorage.
+   * Phase 2: Write share2 to sessionStorage.
    * Called on pagehide/unload. Idempotent — safe if both events fire.
+   * Does NOT write window.name — share1 is always kept current by
+   * _scheduleEagerSave(), so it's already committed before teardown.
    */
   private _finalize() {
-    // Flush any pending debounced save that hasn't fired yet
-    if (this.#debounceTimer !== null) {
-      clearTimeout(this.#debounceTimer)
-      this.#debounceTimer = null
-      this.#pendingFinalize = this._save()
-    }
-    // Write share2 to sessionStorage
     if (this.#pendingFinalize) {
       this.#pendingFinalize()
       this.#pendingFinalize = null

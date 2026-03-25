@@ -163,24 +163,17 @@ test('Persistence (manual persist)', () => {
 
 describe('Two-phase persist', () => {
   beforeEach(() => {
-    jest.useFakeTimers()
     window.top!.name = ''
     window.sessionStorage.clear()
   })
-  afterEach(() => {
-    jest.useRealTimers()
-  })
 
-  test('Phase 1: set() writes to window.name after debounce', () => {
+  test('Phase 1: set() writes share1 to window.name immediately', () => {
     const store = new SK()
     const storageKey = 'session-keystore:default'
     store.set('foo', 'bar')
-    // Before debounce fires, window.name should not have our data yet
-    // (it was cleared by _load() in constructor)
-    jest.advanceTimersByTime(50)
-    // After debounce, share1 should be in window.name
+    // share1 should be in window.name immediately (no debounce)
     expect(window.top!.name).not.toBe('')
-    // But sessionStorage should NOT have share2 yet
+    // But sessionStorage should NOT have share2 yet (written at pagehide)
     expect(window.sessionStorage.getItem(storageKey)).toBeNull()
   })
 
@@ -188,32 +181,14 @@ describe('Two-phase persist', () => {
     const store = new SK()
     const storageKey = 'session-keystore:default'
     store.set('foo', 'bar')
-    jest.advanceTimersByTime(50)
-    // Simulate pagehide
     window.dispatchEvent(new Event('pagehide'))
-    // Now sessionStorage should have share2
     expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
   })
 
   test('Full cycle: eager save + pagehide + new store loads data', () => {
     const storeA = new SK()
     storeA.set('foo', 'bar')
-    jest.advanceTimersByTime(50)
     window.dispatchEvent(new Event('pagehide'))
-    const storeB = new SK()
-    expect(storeB.get('foo')).toEqual('bar')
-  })
-
-  test('Finalize flushes pending debounce if timer has not fired', () => {
-    const store = new SK()
-    const storageKey = 'session-keystore:default'
-    store.set('foo', 'bar')
-    // Do NOT advance timers — debounce hasn't fired
-    // Simulate pagehide — should flush the pending save
-    window.dispatchEvent(new Event('pagehide'))
-    expect(window.top!.name).not.toBe('')
-    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
-    // And a new store should load the data
     const storeB = new SK()
     expect(storeB.get('foo')).toEqual('bar')
   })
@@ -221,27 +196,51 @@ describe('Two-phase persist', () => {
   test('Double finalize (pagehide + unload) is safe', () => {
     const store = new SK()
     store.set('foo', 'bar')
-    jest.advanceTimersByTime(50)
     window.dispatchEvent(new Event('pagehide'))
     window.dispatchEvent(new Event('unload'))
-    // Should not throw, data should still be loadable
     const storeB = new SK()
     expect(storeB.get('foo')).toEqual('bar')
   })
 
-  test('Debouncing: rapid set() calls result in single window.name write', () => {
+  test('Rapid set() calls: all keys persist across pagehide', () => {
     const store = new SK()
     store.set('a', '1')
     store.set('b', '2')
     store.set('c', '3')
-    // Only advance enough for one debounce cycle
-    jest.advanceTimersByTime(50)
-    // All three keys should be present after a single save
     window.dispatchEvent(new Event('pagehide'))
     const storeB = new SK()
     expect(storeB.get('a')).toEqual('1')
     expect(storeB.get('b')).toEqual('2')
     expect(storeB.get('c')).toEqual('3')
+  })
+
+  test('persist() leaves no stale pendingFinalize', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    store.persist()
+    // share2 should already be in sessionStorage from persist()
+    const share2 = window.sessionStorage.getItem(storageKey)
+    expect(share2).not.toBeNull()
+    // A subsequent pagehide should not overwrite share2 with a stale finalize
+    window.dispatchEvent(new Event('pagehide'))
+    // Constructing a new store calls _load(), which consumes (and removes)
+    // the shares, so verify the full round-trip instead:
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('dispose() flushes state and removes event listeners', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    store.dispose()
+    // After dispose, share2 should be written
+    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
+    // Subsequent pagehide should NOT write again (listeners removed)
+    window.sessionStorage.removeItem(storageKey)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull()
   })
 })
 
