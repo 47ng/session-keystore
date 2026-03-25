@@ -82,7 +82,7 @@ test.describe('Persistence across page refresh', () => {
     await context2.close()
   })
 
-  test('window.name is written eagerly before pagehide', async ({ page }) => {
+  test('window.name is written on mutation before pagehide', async ({ page }) => {
     await page.goto('/')
     await page.waitForSelector('#status')
 
@@ -90,7 +90,7 @@ test.describe('Persistence across page refresh', () => {
       ;(window as any).store.set('eager-key', 'eager-value')
     })
 
-    // Check that window.name has data (phase 1 is immediate, no debounce)
+    // Check that window.name has data (share1 written synchronously on set())
     const windowName = await page.evaluate(() => window.name)
     expect(windowName).not.toBe('')
 

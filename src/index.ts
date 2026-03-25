@@ -113,10 +113,10 @@ export default class SessionKeystore<Keys = string> {
     }
     if (!oldItem) {
       this.#emitter.emit('created', { name: key })
-      this._scheduleEagerSave()
+      this._writeShare1()
     } else if (oldItem.value !== newItem.value) {
       this.#emitter.emit('updated', { name: key })
-      this._scheduleEagerSave()
+      this._writeShare1()
     }
   }
 
@@ -137,7 +137,7 @@ export default class SessionKeystore<Keys = string> {
     this._clearTimeout(key)
     this.#store.delete(key)
     this.#emitter.emit('deleted', { name: key })
-    this._scheduleEagerSave()
+    this._writeShare1()
   }
 
   clear() {
@@ -184,7 +184,7 @@ export default class SessionKeystore<Keys = string> {
    * Inspired by ProtonMail's secureSessionStorage (Nov 2025 update):
    * Writing to window.name at pagehide is too late in Chrome/Safari — the
    * browsing context may be frozen and modifications aren't committed.
-   * Instead, we write window.name eagerly on every change, and only commit
+   * Instead, we write window.name on every change, and only commit
    * to sessionStorage at pagehide (which still works reliably).
    */
   private _save(): () => void {
@@ -197,11 +197,11 @@ export default class SessionKeystore<Keys = string> {
   }
 
   /**
-   * Eagerly write share1 to window.name on every mutation.
-   * No debounce — writes to window.name during pagehide may not commit
-   * on Chrome 146+, so share1 must always be current before teardown.
+   * Write share1 to window.name on every mutation.
+   * Writes to window.name during pagehide may not commit on Chrome 146+,
+   * so share1 must always be current before teardown.
    */
-  private _scheduleEagerSave() {
+  private _writeShare1() {
     if (typeof window === 'undefined') {
       return
     }
@@ -212,7 +212,7 @@ export default class SessionKeystore<Keys = string> {
    * Phase 2: Write share2 to sessionStorage.
    * Called on pagehide/unload. Idempotent — safe if both events fire.
    * Does NOT write window.name — share1 is always kept current by
-   * _scheduleEagerSave(), so it's already committed before teardown.
+   * _writeShare1(), so it's already committed before teardown.
    */
   private _finalize() {
     if (this.#pendingFinalize) {

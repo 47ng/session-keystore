@@ -171,7 +171,7 @@ describe('Two-phase persist', () => {
     const store = new SK()
     const storageKey = 'session-keystore:default'
     store.set('foo', 'bar')
-    // share1 should be in window.name immediately (no debounce)
+    // share1 should be in window.name after set()
     expect(window.top!.name).not.toBe('')
     // But sessionStorage should NOT have share2 yet (written at pagehide)
     expect(window.sessionStorage.getItem(storageKey)).toBeNull()
@@ -185,7 +185,7 @@ describe('Two-phase persist', () => {
     expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
   })
 
-  test('Full cycle: eager save + pagehide + new store loads data', () => {
+  test('Full cycle: set() + pagehide + new store loads data', () => {
     const storeA = new SK()
     storeA.set('foo', 'bar')
     window.dispatchEvent(new Event('pagehide'))
