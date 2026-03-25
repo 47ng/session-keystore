@@ -8,9 +8,13 @@ updates:
       timezone: Europe/Paris
     assignees:
       - franky47
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     assignees:
       - franky47
+    cooldown:
+      default-days: 7

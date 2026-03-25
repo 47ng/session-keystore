@@ -14,8 +14,10 @@ jobs:
     name: Continuous Integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.x
           cache: yarn
@@ -23,7 +25,7 @@ jobs:
         name: Install dependencies
       - run: yarn ci
         name: Run integration tests
-      - uses: coverallsapp/github-action@v2
+      - uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
         name: Report code coverage
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
