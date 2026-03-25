@@ -153,12 +153,95 @@ test('Set a key that already expired', () => {
   expect(expired).toHaveBeenCalledTimes(1)
 })
 
-test('Persistence', () => {
+test('Persistence (manual persist)', () => {
   const storeA = new SK()
   storeA.set('foo', 'bar')
   storeA.persist()
   const storeB = new SK()
   expect(storeB.get('foo')).toEqual('bar')
+})
+
+describe('Two-phase persist', () => {
+  beforeEach(() => {
+    window.top!.name = ''
+    window.sessionStorage.clear()
+  })
+
+  test('Phase 1: set() writes share1 to window.name immediately', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    // share1 should be in window.name after set()
+    expect(window.top!.name).not.toBe('')
+    // But sessionStorage should NOT have share2 yet (written at pagehide)
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull()
+  })
+
+  test('Phase 2: pagehide writes share2 to sessionStorage', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    window.dispatchEvent(new Event('pagehide'))
+    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
+  })
+
+  test('Full cycle: set() + pagehide + new store loads data', () => {
+    const storeA = new SK()
+    storeA.set('foo', 'bar')
+    window.dispatchEvent(new Event('pagehide'))
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('Double finalize (pagehide + unload) is safe', () => {
+    const store = new SK()
+    store.set('foo', 'bar')
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new Event('unload'))
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('Rapid set() calls: all keys persist across pagehide', () => {
+    const store = new SK()
+    store.set('a', '1')
+    store.set('b', '2')
+    store.set('c', '3')
+    window.dispatchEvent(new Event('pagehide'))
+    const storeB = new SK()
+    expect(storeB.get('a')).toEqual('1')
+    expect(storeB.get('b')).toEqual('2')
+    expect(storeB.get('c')).toEqual('3')
+  })
+
+  test('persist() leaves no stale pendingFinalize', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    store.persist()
+    // share2 should already be in sessionStorage from persist()
+    const share2 = window.sessionStorage.getItem(storageKey)
+    expect(share2).not.toBeNull()
+    // A subsequent pagehide should not overwrite share2 with a stale finalize
+    window.dispatchEvent(new Event('pagehide'))
+    // Constructing a new store calls _load(), which consumes (and removes)
+    // the shares, so verify the full round-trip instead:
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('dispose() flushes state and removes event listeners', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    store.dispose()
+    // After dispose, share2 should be written
+    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
+    // Subsequent pagehide should NOT write again (listeners removed)
+    window.sessionStorage.removeItem(storageKey)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull()
+  })
 })
 
 test('v0 to v1 conversion', () => {

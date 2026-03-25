@@ -3,3 +3,5 @@ dist/
 .env
 yarn-error.log
 coverage/
+e2e/fixture/
+test-results/
