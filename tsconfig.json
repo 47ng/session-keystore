@@ -30,5 +30,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "exclude": ["./src/**/*.test.ts", "./dist", "./node_modules", "./demo"]
+  "exclude": ["./src/**/*.test.ts", "./dist", "./node_modules", "./demo", "./e2e", "./playwright.config.ts"]
 }

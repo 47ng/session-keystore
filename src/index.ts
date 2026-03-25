@@ -58,6 +58,8 @@ export default class SessionKeystore<Keys = string> {
   #emitter: Emitter
   #store: Map<Keys, ExpirableKeyV1>
   #timeouts: Map<Keys, any>
+  #debounceTimer: any = null
+  #pendingFinalize: (() => void) | null = null
 
   // --
 
@@ -72,7 +74,11 @@ export default class SessionKeystore<Keys = string> {
       try {
         this._load()
       } catch {}
-      window.addEventListener('unload', this.persist.bind(this))
+      // Phase 2: finalize on pagehide (preferred) with unload fallback.
+      // Both may fire — _finalize() is idempotent.
+      const finalizeHandler = this._finalize.bind(this)
+      window.addEventListener('pagehide', finalizeHandler)
+      window.addEventListener('unload', finalizeHandler)
     }
   }
 
@@ -107,8 +113,10 @@ export default class SessionKeystore<Keys = string> {
     }
     if (!oldItem) {
       this.#emitter.emit('created', { name: key })
+      this._scheduleEagerSave()
     } else if (oldItem.value !== newItem.value) {
       this.#emitter.emit('updated', { name: key })
+      this._scheduleEagerSave()
     }
   }
 
@@ -129,6 +137,7 @@ export default class SessionKeystore<Keys = string> {
     this._clearTimeout(key)
     this.#store.delete(key)
     this.#emitter.emit('deleted', { name: key })
+    this._scheduleEagerSave()
   }
 
   clear() {
@@ -137,6 +146,10 @@ export default class SessionKeystore<Keys = string> {
 
   // --
 
+  /**
+   * Manually persist both shares synchronously.
+   * Preserved for backwards compatibility.
+   */
   persist() {
     /* istanbul ignore next */
     if (typeof window === 'undefined') {
@@ -144,10 +157,62 @@ export default class SessionKeystore<Keys = string> {
         'SessionKeystore.persist is only available in the browser.'
       )
     }
+    const finalize = this._save()
+    finalize()
+  }
+
+  /**
+   * Phase 1: XOR-split the store and write share1 to window.name immediately.
+   * Returns a finalize callback (phase 2) that writes share2 to sessionStorage.
+   *
+   * Inspired by ProtonMail's secureSessionStorage (Nov 2025 update):
+   * Writing to window.name at pagehide is too late in Chrome/Safari — the
+   * browsing context may be frozen and modifications aren't committed.
+   * Instead, we write window.name eagerly on every change, and only commit
+   * to sessionStorage at pagehide (which still works reliably).
+   */
+  private _save(): () => void {
     const json = JSON.stringify(Array.from(this.#store.entries()))
     const [a, b] = split(json)
     saveToWindowName(this.#storageKey, a)
-    window.sessionStorage.setItem(this.#storageKey, b)
+    return () => {
+      window.sessionStorage.setItem(this.#storageKey, b)
+    }
+  }
+
+  /**
+   * Schedule a debounced phase 1 save.
+   * Called on every mutation (set, delete).
+   */
+  private _scheduleEagerSave() {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (this.#debounceTimer !== null) {
+      clearTimeout(this.#debounceTimer)
+    }
+    this.#debounceTimer = setTimeout(() => {
+      this.#debounceTimer = null
+      this.#pendingFinalize = this._save()
+    }, 50)
+  }
+
+  /**
+   * Phase 2: Flush pending saves and write share2 to sessionStorage.
+   * Called on pagehide/unload. Idempotent — safe if both events fire.
+   */
+  private _finalize() {
+    // Flush any pending debounced save that hasn't fired yet
+    if (this.#debounceTimer !== null) {
+      clearTimeout(this.#debounceTimer)
+      this.#debounceTimer = null
+      this.#pendingFinalize = this._save()
+    }
+    // Write share2 to sessionStorage
+    if (this.#pendingFinalize) {
+      this.#pendingFinalize()
+      this.#pendingFinalize = null
+    }
   }
 
   private _load() {

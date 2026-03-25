@@ -153,12 +153,96 @@ test('Set a key that already expired', () => {
   expect(expired).toHaveBeenCalledTimes(1)
 })
 
-test('Persistence', () => {
+test('Persistence (manual persist)', () => {
   const storeA = new SK()
   storeA.set('foo', 'bar')
   storeA.persist()
   const storeB = new SK()
   expect(storeB.get('foo')).toEqual('bar')
+})
+
+describe('Two-phase persist', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+    window.top!.name = ''
+    window.sessionStorage.clear()
+  })
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  test('Phase 1: set() writes to window.name after debounce', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    // Before debounce fires, window.name should not have our data yet
+    // (it was cleared by _load() in constructor)
+    jest.advanceTimersByTime(50)
+    // After debounce, share1 should be in window.name
+    expect(window.top!.name).not.toBe('')
+    // But sessionStorage should NOT have share2 yet
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull()
+  })
+
+  test('Phase 2: pagehide writes share2 to sessionStorage', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    jest.advanceTimersByTime(50)
+    // Simulate pagehide
+    window.dispatchEvent(new Event('pagehide'))
+    // Now sessionStorage should have share2
+    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
+  })
+
+  test('Full cycle: eager save + pagehide + new store loads data', () => {
+    const storeA = new SK()
+    storeA.set('foo', 'bar')
+    jest.advanceTimersByTime(50)
+    window.dispatchEvent(new Event('pagehide'))
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('Finalize flushes pending debounce if timer has not fired', () => {
+    const store = new SK()
+    const storageKey = 'session-keystore:default'
+    store.set('foo', 'bar')
+    // Do NOT advance timers — debounce hasn't fired
+    // Simulate pagehide — should flush the pending save
+    window.dispatchEvent(new Event('pagehide'))
+    expect(window.top!.name).not.toBe('')
+    expect(window.sessionStorage.getItem(storageKey)).not.toBeNull()
+    // And a new store should load the data
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('Double finalize (pagehide + unload) is safe', () => {
+    const store = new SK()
+    store.set('foo', 'bar')
+    jest.advanceTimersByTime(50)
+    window.dispatchEvent(new Event('pagehide'))
+    window.dispatchEvent(new Event('unload'))
+    // Should not throw, data should still be loadable
+    const storeB = new SK()
+    expect(storeB.get('foo')).toEqual('bar')
+  })
+
+  test('Debouncing: rapid set() calls result in single window.name write', () => {
+    const store = new SK()
+    store.set('a', '1')
+    store.set('b', '2')
+    store.set('c', '3')
+    // Only advance enough for one debounce cycle
+    jest.advanceTimersByTime(50)
+    // All three keys should be present after a single save
+    window.dispatchEvent(new Event('pagehide'))
+    const storeB = new SK()
+    expect(storeB.get('a')).toEqual('1')
+    expect(storeB.get('b')).toEqual('2')
+    expect(storeB.get('c')).toEqual('3')
+  })
 })
 
 test('v0 to v1 conversion', () => {
