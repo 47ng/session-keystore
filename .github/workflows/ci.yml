@@ -29,6 +29,10 @@ jobs:
         name: Report code coverage
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: npx playwright install --with-deps chromium
+        name: Install Chromium for Playwright
+      - run: yarn test:e2e
+        name: Run e2e tests
       - uses: 47ng/actions-slack-notify@main
         name: Notify on Slack
         if: always()
