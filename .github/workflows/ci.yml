@@ -14,25 +14,16 @@ jobs:
     name: Continuous Integration
     runs-on: ubuntu-latest
     steps:
-      - id: yarn-cache
-        name: Get Yarn cache path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-      - uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
-      - uses: actions/setup-node@56899e050abffc08c2b3b61f3ec6a79a9dc3223d
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 14.x
-      - uses: actions/cache@26968a09c0ea4f3e233fdddbafd1166051a095f6
-        name: Load Yarn cache
-        with:
-          path: ${{ steps.yarn-cache.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version: 22.x
+          cache: yarn
       - run: yarn install --ignore-scripts
         name: Install dependencies
       - run: yarn ci
         name: Run integration tests
-      - uses: coverallsapp/github-action@8cbef1dea373ebce56de0a14c68d6267baa10b44
+      - uses: coverallsapp/github-action@v2
         name: Report code coverage
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
