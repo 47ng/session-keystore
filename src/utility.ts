@@ -1,4 +1,5 @@
 import { b64, utf8 } from '@47ng/codec'
+import { hash } from '@stablelib/sha256'
 
 const randomBytes = (length: number): Uint8Array => {
   if (typeof window === 'undefined') {
@@ -9,27 +10,28 @@ const randomBytes = (length: number): Uint8Array => {
   }
 }
 
+const SALT_LENGTH = 32
+
+const hashOf = (windowNameHalf: string) =>
+  b64.encode(hash(utf8.encode(windowNameHalf)))
+
+const xor = (data: Uint8Array, pad: Uint8Array) =>
+  new Uint8Array(data).map((byte, i) => byte ^ pad[i])
+
 export const split = (secret: string): [string, string] => {
-  const buff = utf8.encode(secret)
-  const rand1 = randomBytes(buff.length)
-  const rand2 = new Uint8Array(rand1) // Make a copy
-  for (const i in buff) {
-    rand2[i] = rand2[i] ^ buff[i]
-  }
-  return [b64.encode(rand1), b64.encode(rand2)]
+  const data = utf8.encode(secret)
+  const pad = randomBytes(data.length + SALT_LENGTH)
+  const windowNameHalf = b64.encode(pad)
+  const encrypted = b64.encode(xor(data, pad))
+  return [windowNameHalf, `${encrypted}.${hashOf(windowNameHalf)}`]
 }
 
-export const join = (a: string, b: string) => {
-  if (a.length !== b.length) {
+export const join = (windowNameHalf: string, sessionStorageHalf: string) => {
+  const [encrypted, expectedHash] = sessionStorageHalf.split('.')
+  if (expectedHash !== hashOf(windowNameHalf)) {
     return null
   }
-  const aBuff = b64.decode(a)
-  const bBuff = b64.decode(b)
-  const output = new Uint8Array(aBuff.length)
-  for (const i in output) {
-    output[i] = aBuff[i] ^ bBuff[i]
-  }
-  return utf8.decode(output)
+  return utf8.decode(xor(b64.decode(encrypted), b64.decode(windowNameHalf)))
 }
 
 // --

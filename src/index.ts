@@ -208,7 +208,6 @@ export default class SessionKeystore<Keys = string> {
     }
     removeFromWindowName(this.#storageKey)
     const json = join(windowNameHalf, sessionStorageHalf)
-    /* istanbul ignore next */
     if (!json) {
       return
     }

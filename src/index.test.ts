@@ -1,3 +1,5 @@
+import { b64, utf8 } from '@47ng/codec'
+import { hash } from '@stablelib/sha256'
 import SK from './index'
 import { split, join, saveToWindowName } from './utility'
 
@@ -17,6 +19,17 @@ function reloadPage(name: string) {
 function restoreFromBackForwardCache() {
   window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
   window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+}
+
+function xorIntoWindowNameHalf(name: string, from: string, to: string) {
+  const halves = JSON.parse(window.name)
+  const half = b64.decode(halves[storageKey(name)])
+  const [fromBytes, toBytes] = [utf8.encode(from), utf8.encode(to)]
+  fromBytes.forEach((byte, i) => {
+    half[i] ^= byte ^ toBytes[i]
+  })
+  halves[storageKey(name)] = b64.encode(half)
+  window.name = JSON.stringify(halves)
 }
 
 function readPersistedJson(name: string) {
@@ -351,6 +364,48 @@ describe('Persistence across page loads', () => {
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
     reloadPage(name)
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+  })
+
+  test('forgets keys saved by version 1.0.3', () => {
+    const name = uniqueName()
+    const halvesFromVersion103 = {
+      windowName: 'ndqT0N7slCiLowiqPnhjg2QxZSQX3t0ZLiWPRlRM1A==',
+      sessionStorage: 'xoGxtrGDtgTwgX6IBElPoRJQCVFy_Oc7TET9ZCkRiQ=='
+    }
+    saveToWindowName(storageKey(name), halvesFromVersion103.windowName)
+    window.sessionStorage.setItem(
+      storageKey(name),
+      halvesFromVersion103.sessionStorage
+    )
+    expect(new SK({ name }).get('foo')).toBeNull()
+    expect(window.name).toEqual('')
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+  })
+
+  test('forgets keys after another site changes the window.name half', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    xorIntoWindowNameHalf(
+      name,
+      '[["foo",{"v":1,"value":"bar"}]]',
+      '[["foo",{"v":1,"value":"baz"}]]'
+    )
+    expect(new SK({ name }).get('foo')).toBeNull()
+  })
+
+  test('gives a disk reader no way to confirm a guess of the keys', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    const sessionStorageHalf = window.sessionStorage.getItem(storageKey(name))!
+    const [encrypted] = sessionStorageHalf.split('.')
+    const correctGuess = utf8.encode('[["foo",{"v":1,"value":"bar"}]]')
+    const guessedWindowNameHalf = b64.encode(
+      b64.decode(encrypted).map((byte, i) => byte ^ correctGuess[i])
+    )
+    const guessedHash = b64.encode(hash(utf8.encode(guessedWindowNameHalf)))
+    expect(sessionStorageHalf).not.toContain(guessedHash)
   })
 
   test('removes the sessionStorage half when the page comes back from the back/forward cache', () => {

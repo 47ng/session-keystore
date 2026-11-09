@@ -108,6 +108,45 @@ test('ignores window.name changes from another site after a back/forward cache r
   expect(await getKey(page, 'foo')).toEqual('bar')
 })
 
+test('ignores keys another site changes in window.name', async ({
+  page,
+  browserName
+}) => {
+  test.skip(
+    browserName !== 'chromium',
+    'Firefox and WebKit clear window.name when the tab goes to another site'
+  )
+  const otherSite = 'https://other.test'
+  await page.route(`${otherSite}/**`, route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<script>
+        const from = '[["apiKey",{"v":1,"value":"secret"}]]'
+        const to = '[["apiKey",{"v":1,"value":"second"}]]'
+        const halves = JSON.parse(window.name)
+        const half = halves['session-keystore:default']
+        const pad = atob(half.replaceAll('-', '+').replaceAll('_', '/'))
+        const changed = Array.from(pad, (char, i) =>
+          String.fromCharCode(
+            char.charCodeAt(0) ^ (from.charCodeAt(i) ^ to.charCodeAt(i) || 0)
+          )
+        ).join('')
+        halves['session-keystore:default'] = btoa(changed)
+          .replaceAll('+', '-')
+          .replaceAll('/', '_')
+        window.name = JSON.stringify(halves)
+        window.changed = true
+      </script>`
+    })
+  )
+  await page.goto(origin)
+  await setKey(page, 'apiKey', 'secret')
+  await page.goto(otherSite)
+  expect(await page.evaluate(() => (window as any).changed)).toBe(true)
+  await page.goto(origin)
+  expect(await getKey(page, 'apiKey')).toBeNull()
+})
+
 test('works in memory inside a cross-origin iframe', async ({ page }) => {
   const parentOrigin = 'https://parent.test'
   await page.route(`${parentOrigin}/**`, route =>

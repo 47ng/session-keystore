@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@47ng/codec": "^1.0.0",
+    "@stablelib/sha256": "1.0.1",
     "mitt": "^2.1.0"
   },
   "devDependencies": {
