@@ -1,5 +1,12 @@
 import mitt, { Emitter } from 'mitt'
-import { split, saveToWindowName, loadFromWindowName, join } from './utility'
+import {
+  split,
+  join,
+  canPersist,
+  saveToWindowName,
+  readFromWindowName,
+  removeFromWindowName
+} from './utility'
 
 interface ExpirableKeyV0 {
   readonly key: string
@@ -58,6 +65,8 @@ export default class SessionKeystore<Keys = string> {
   #emitter: Emitter
   #store: Map<Keys, ExpirableKeyV1>
   #timeouts: Map<Keys, any>
+  #halves: { windowName: string; sessionStorage: string } | null = null
+  #canPersist = false
 
   // --
 
@@ -72,7 +81,16 @@ export default class SessionKeystore<Keys = string> {
       try {
         this._load()
       } catch {}
-      window.addEventListener('unload', this.persist.bind(this))
+      this.#canPersist = canPersist()
+      if (this.#store.size > 0) {
+        this._writeWindowNameHalf()
+      }
+      window.addEventListener('pagehide', () => this._writeSessionStorageHalf())
+      window.addEventListener('pageshow', event => {
+        if (event.persisted && this._ownsWindowName()) {
+          this._writeWindowNameHalf()
+        }
+      })
     }
   }
 
@@ -105,6 +123,7 @@ export default class SessionKeystore<Keys = string> {
     if (this._setTimeout(key) === 'expired') {
       return // Don't call created or updated
     }
+    this._writeWindowNameHalf()
     if (!oldItem) {
       this.#emitter.emit('created', { name: key })
     } else if (oldItem.value !== newItem.value) {
@@ -128,6 +147,7 @@ export default class SessionKeystore<Keys = string> {
   delete(key: Keys) {
     this._clearTimeout(key)
     this.#store.delete(key)
+    this._writeWindowNameHalf()
     this.#emitter.emit('deleted', { name: key })
   }
 
@@ -144,19 +164,49 @@ export default class SessionKeystore<Keys = string> {
         'SessionKeystore.persist is only available in the browser.'
       )
     }
+    this._writeSessionStorageHalf()
+  }
+
+  private _writeWindowNameHalf() {
+    if (!this.#canPersist) {
+      return
+    }
+    window.sessionStorage.removeItem(this.#storageKey)
+    this.#halves = null
+    if (this.#store.size === 0) {
+      removeFromWindowName(this.#storageKey)
+      return
+    }
     const json = JSON.stringify(Array.from(this.#store.entries()))
-    const [a, b] = split(json)
-    saveToWindowName(this.#storageKey, a)
-    window.sessionStorage.setItem(this.#storageKey, b)
+    const [windowName, sessionStorage] = split(json)
+    saveToWindowName(this.#storageKey, windowName)
+    this.#halves = { windowName, sessionStorage }
+  }
+
+  private _writeSessionStorageHalf() {
+    if (this.#halves && this._ownsWindowName()) {
+      window.sessionStorage.setItem(
+        this.#storageKey,
+        this.#halves.sessionStorage
+      )
+    }
+  }
+
+  private _ownsWindowName() {
+    return (
+      this.#halves !== null &&
+      readFromWindowName(this.#storageKey) === this.#halves.windowName
+    )
   }
 
   private _load() {
-    const a = loadFromWindowName(this.#storageKey)
+    const a = readFromWindowName(this.#storageKey)
     const b = window.sessionStorage.getItem(this.#storageKey)
     window.sessionStorage.removeItem(this.#storageKey)
     if (!a || !b) {
       return
     }
+    removeFromWindowName(this.#storageKey)
     const json = join(a, b)
     /* istanbul ignore next */
     if (!json) {
@@ -210,6 +260,7 @@ export default class SessionKeystore<Keys = string> {
   private _expired(key: Keys) {
     this._clearTimeout(key)
     this.#store.delete(key)
+    this._writeWindowNameHalf()
     this.#emitter.emit('expired', { name: key })
   }
 }

@@ -25,6 +25,10 @@ jobs:
         name: Install dependencies
       - run: yarn ci
         name: Run integration tests
+      - run: yarn playwright install --with-deps chromium firefox webkit
+        name: Install browsers
+      - run: yarn test:e2e
+        name: Run end-to-end tests
       - uses: coverallsapp/github-action@5cbfd81b66ca5d10c19b062c04de0199c215fb6e # v2.3.7
         name: Report code coverage
         with:

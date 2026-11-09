@@ -34,12 +34,22 @@ export const join = (a: string, b: string) => {
 
 // --
 
-const loadObjectFromWindowName = (): { [key: string]: string } => {
-  if (!window.top.name || window.top.name === '') {
-    return {}
-  }
+export const canPersist = () => {
   try {
-    return JSON.parse(window.top.name)
+    window.top.name
+    window.sessionStorage
+    return true
+  } catch {
+    return false
+  }
+}
+
+const loadObjectFromWindowName = (): { [key: string]: string } => {
+  try {
+    const saved = JSON.parse(window.top.name)
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      return saved
+    }
   } catch {}
   return {}
 }
@@ -50,13 +60,15 @@ export const saveToWindowName = (name: string, data: string) => {
   window.top.name = JSON.stringify(obj)
 }
 
-export const loadFromWindowName = (name: string) => {
+export const readFromWindowName = (name: string) =>
+  loadObjectFromWindowName()[name] ?? null
+
+export const removeFromWindowName = (name: string) => {
   const saved = loadObjectFromWindowName()
   if (!(name in saved)) {
-    return null
+    return
   }
-  const { [name]: out, ...safe } = saved
-  const json = JSON.stringify(safe)
+  delete saved[name]
+  const json = JSON.stringify(saved)
   window.top.name = json === '{}' ? '' : json
-  return out || null
 }
