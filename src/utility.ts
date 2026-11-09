@@ -46,7 +46,7 @@ export const canPersist = () => {
   }
 }
 
-const loadObjectFromWindowName = (): { [key: string]: string } => {
+const loadObjectFromWindowName = (): Record<string, unknown> => {
   try {
     const saved = JSON.parse(window.top.name)
     if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
@@ -62,8 +62,10 @@ export const saveToWindowName = (name: string, data: string) => {
   window.top.name = JSON.stringify(obj)
 }
 
-export const readFromWindowName = (name: string) =>
-  loadObjectFromWindowName()[name] ?? null
+export const readFromWindowName = (name: string) => {
+  const half = loadObjectFromWindowName()[name]
+  return typeof half === 'string' ? half : null
+}
 
 export const removeFromWindowName = (name: string) => {
   const saved = loadObjectFromWindowName()

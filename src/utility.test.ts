@@ -1,5 +1,5 @@
 import { b64, utf8 } from '@47ng/codec'
-import { split, join } from './utility'
+import { split, join, readFromWindowName } from './utility'
 
 const hashPart = (sessionStorageHalf: string) =>
   sessionStorageHalf.split('.')[1]
@@ -43,6 +43,12 @@ test('join rejects a window.name half cut to the length of the data', () => {
   const [windowNameHalf, sessionStorageHalf] = split(secret)
   const cut = b64.decode(windowNameHalf).slice(0, utf8.encode(secret).length)
   expect(join(b64.encode(cut), sessionStorageHalf)).toBeNull()
+})
+
+test('readFromWindowName ignores a half that is not a string', () => {
+  window.name = JSON.stringify({ store: ['half'] })
+  expect(readFromWindowName('store')).toBeNull()
+  window.name = ''
 })
 
 test('join rejects a sessionStorage half without a hash', () => {
