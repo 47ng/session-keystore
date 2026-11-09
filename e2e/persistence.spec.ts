@@ -84,6 +84,30 @@ test('keeps keys after a back/forward cache restore', async ({
   expect(await getKey(page, 'foo')).toEqual('bar')
 })
 
+test('ignores window.name changes from another site after a back/forward cache restore', async ({
+  page,
+  browserName
+}) => {
+  test.skip(
+    browserName !== 'chromium',
+    'Playwright turns off the back/forward cache in Firefox and WebKit'
+  )
+  const otherSite = 'https://other.test'
+  await page.route(`${otherSite}/**`, route =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<script>window.name = "tampered"</script>'
+    })
+  )
+  await page.goto(origin)
+  await setKey(page, 'foo', 'bar')
+  await page.goto(otherSite)
+  await page.goBack({ waitUntil: 'commit' })
+  await page.waitForFunction(() => (window as any).restoredFromCache === true)
+  await page.reload()
+  expect(await getKey(page, 'foo')).toEqual('bar')
+})
+
 test('works in memory inside a cross-origin iframe', async ({ page }) => {
   const parentOrigin = 'https://parent.test'
   await page.route(`${parentOrigin}/**`, route =>
