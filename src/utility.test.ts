@@ -18,7 +18,7 @@ test('split gives a new hash each time for the same secret', () => {
 })
 
 test('split adds 32 random bytes to the window.name half', () => {
-  const secret = 'Hello, World !'
+  const secret = '🔑'.repeat(20)
   const [windowNameHalf] = split(secret)
   expect(b64.decode(windowNameHalf).length).toEqual(
     utf8.encode(secret).length + 32
