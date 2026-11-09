@@ -157,7 +157,8 @@ It writes the sessionStorage share on `pagehide` (or when you call `persist()`),
 if `window.name` still holds its share.
 It removes the sessionStorage share when the page loads or when a key changes,
 so that share stays on disk only for a short time while the page is open.
-A store with no keys removes its share from `window.name` and does not add a new one.
+When a store loses its last key, it removes its share from `window.name`.
+A store with no keys does not add one.
 
 When the page comes back from the back/forward cache, it still holds the keys in memory.
 If `window.name` still holds its share, it removes the sessionStorage share,
