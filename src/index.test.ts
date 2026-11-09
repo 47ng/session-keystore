@@ -9,9 +9,14 @@ function reloadPage(name: string) {
   const nameBeforeUnload = window.name
   window.dispatchEvent(new PageTransitionEvent('pagehide'))
   window.dispatchEvent(new Event('unload'))
-  // Chromium 146+ applies window.name writes made while unloading one page late
+  // Chromium applies window.name writes made during unload one navigation late
   window.name = nameBeforeUnload
   return new SK({ name })
+}
+
+function restoreFromBackForwardCache() {
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
 }
 
 function readPersistedJson(name: string) {
@@ -183,6 +188,7 @@ test('Persistence', () => {
 describe('Persistence across page loads', () => {
   afterEach(() => {
     jest.useRealTimers()
+    window.name = ''
   })
 
   test('restores keys after a reload', () => {
@@ -258,12 +264,8 @@ describe('Persistence across page loads', () => {
 
   test('leaves window.name alone while the store is empty', () => {
     window.name = 'popup'
-    try {
-      new SK({ name: uniqueName() }).delete('missing')
-      expect(window.name).toEqual('popup')
-    } finally {
-      window.name = ''
-    }
+    new SK({ name: uniqueName() }).delete('missing')
+    expect(window.name).toEqual('popup')
   })
 
   test('removes its window.name half once the store is empty', () => {
@@ -278,15 +280,11 @@ describe('Persistence across page loads', () => {
     'works when window.name holds the JSON value %s',
     value => {
       window.name = value
-      try {
-        const name = uniqueName()
-        const store = new SK({ name })
-        store.set('foo', 'bar')
-        expect(store.get('foo')).toEqual('bar')
-        expect(reloadPage(name).get('foo')).toEqual('bar')
-      } finally {
-        window.name = ''
-      }
+      const name = uniqueName()
+      const store = new SK({ name })
+      store.set('foo', 'bar')
+      expect(store.get('foo')).toEqual('bar')
+      expect(reloadPage(name).get('foo')).toEqual('bar')
     }
   )
 
@@ -324,12 +322,7 @@ describe('Persistence across page loads', () => {
     const name = uniqueName()
     new SK({ name }).set('foo', 'bar')
     new SK({ name })
-    window.dispatchEvent(
-      new PageTransitionEvent('pagehide', { persisted: true })
-    )
-    window.dispatchEvent(
-      new PageTransitionEvent('pageshow', { persisted: true })
-    )
+    restoreFromBackForwardCache()
     expect(reloadPage(name).get('foo')).toEqual('bar')
   })
 
@@ -363,12 +356,7 @@ describe('Persistence across page loads', () => {
   test('removes the sessionStorage half when the page comes back from the back/forward cache', () => {
     const name = uniqueName()
     new SK({ name }).set('foo', 'bar')
-    window.dispatchEvent(
-      new PageTransitionEvent('pagehide', { persisted: true })
-    )
-    window.dispatchEvent(
-      new PageTransitionEvent('pageshow', { persisted: true })
-    )
+    restoreFromBackForwardCache()
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
     expect(reloadPage(name).get('foo')).toEqual('bar')
   })

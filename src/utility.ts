@@ -9,7 +9,7 @@ const randomBytes = (length: number): Uint8Array => {
   }
 }
 
-export const split = (secret: string): string[] => {
+export const split = (secret: string): [string, string] => {
   const buff = utf8.encode(secret)
   const rand1 = randomBytes(buff.length)
   const rand2 = new Uint8Array(rand1) // Make a copy

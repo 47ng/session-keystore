@@ -66,7 +66,7 @@ export default class SessionKeystore<Keys = string> {
   #store: Map<Keys, ExpirableKeyV1>
   #timeouts: Map<Keys, any>
   #halves: { windowName: string; sessionStorage: string } | null = null
-  #canPersist = false
+  readonly #canPersist: boolean = false
 
   // --
 
@@ -200,14 +200,14 @@ export default class SessionKeystore<Keys = string> {
   }
 
   private _load() {
-    const a = readFromWindowName(this.#storageKey)
-    const b = window.sessionStorage.getItem(this.#storageKey)
+    const windowNameHalf = readFromWindowName(this.#storageKey)
+    const sessionStorageHalf = window.sessionStorage.getItem(this.#storageKey)
     window.sessionStorage.removeItem(this.#storageKey)
-    if (!a || !b) {
+    if (!windowNameHalf || !sessionStorageHalf) {
       return
     }
     removeFromWindowName(this.#storageKey)
-    const json = join(a, b)
+    const json = join(windowNameHalf, sessionStorageHalf)
     /* istanbul ignore next */
     if (!json) {
       return

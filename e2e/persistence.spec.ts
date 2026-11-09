@@ -73,7 +73,7 @@ test('keeps keys after a back/forward cache restore', async ({
 }) => {
   test.skip(
     browserName !== 'chromium',
-    'Only Chromium uses the back/forward cache under Playwright'
+    'Playwright turns off the back/forward cache in Firefox and WebKit'
   )
   await page.goto(origin)
   await setKey(page, 'foo', 'bar')
