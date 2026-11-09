@@ -144,6 +144,33 @@ From the ProtonMail documentation:
 > can't read the data since they can't access `window.name`. The lifetime
 > of the data is therefore the smaller lifetime, that of `window.name`.
 
+### When the shares are written
+
+Recent versions of Chromium apply writes to `window.name` made while the page unloads
+(in `unload`, `pagehide` or `beforeunload`) one navigation late:
+the next page gets the value from one navigation earlier.
+
+To avoid this, the store writes the `window.name` share each time a key changes,
+and keeps the sessionStorage share in memory.
+It writes the sessionStorage share on `pagehide` (or when you call `persist()`),
+and removes it when the page loads or when a key changes,
+so that share spends little time on disk while the page is open.
+An empty store does not write to `window.name`.
+
+When the store cannot reach `window.top.name` or sessionStorage
+(in a cross-origin iframe, or with storage blocked), it keeps keys in memory only.
+
+Chromium usually keeps `window.name` when the tab goes to another site,
+so that site can read the store name and the `window.name` share:
+random bytes as long as the stored JSON.
+It cannot read the sessionStorage share, so it cannot rebuild the keys.
+It can change or erase the `window.name` share, though:
+when the user comes back, keys may then be corrupted or missing.
+Firefox and WebKit clear `window.name` in that case.
+Firefox restores it when the user comes back, WebKit does not, so keys are lost there.
+None of this applies when the page comes back from the back/forward cache:
+it still holds the keys in memory and writes its shares again.
+
 ## License
 
 [MIT](https://github.com/47ng/session-keystore/blob/master/LICENSE) - Made with ❤️ by [François Best](https://francoisbest.com)
