@@ -157,14 +157,13 @@ It writes the sessionStorage share on `pagehide` (or when you call `persist()`),
 if `window.name` still holds its share.
 It removes the sessionStorage share when the page loads or when a key changes,
 so that share stays on disk only for a short time while the page is open.
-A store with no keys does not add a share to `window.name`,
-and removes its share when it has no more keys.
+A store with no keys removes its share from `window.name` and does not add a new one.
 
 When the page comes back from the back/forward cache, it still holds the keys in memory.
-If `window.name` still holds its share, it writes a new `window.name` share
-and keeps the new sessionStorage share in memory.
+If `window.name` still holds its share, it removes the sessionStorage share,
+writes a new `window.name` share and keeps the new sessionStorage share in memory.
 If not, it writes nothing until a key changes,
-and a sessionStorage share from another page can stay on disk until then.
+and an old sessionStorage share can stay on disk until then.
 
 When the store cannot reach `window.top.name` or sessionStorage
 (in a cross-origin iframe, or with storage blocked), it keeps keys in memory only.
@@ -177,7 +176,7 @@ It can change or erase the `window.name` share, though:
 when the user comes back, the store may then load changed keys or no keys.
 In Chromium, a page that comes back from the back/forward cache gets its own `window.name` back,
 so the other site's changes have no effect.
-Firefox and WebKit clear `window.name` in that case.
+Firefox and WebKit clear `window.name` when the tab goes to another site.
 Firefox restores it when the user comes back. WebKit does not, so the store loses the keys.
 
 ## License
