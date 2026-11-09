@@ -171,14 +171,25 @@ When the store cannot reach `window.top.name` or sessionStorage
 
 Chromium usually keeps `window.name` when the tab goes to another site,
 so that site can read the store name and the `window.name` share:
-base64 text of random bytes. Its length shows the size of the stored JSON.
+base64 text of random bytes. Its length shows the size of the stored JSON (the share holds 32 bytes more).
 It cannot read the sessionStorage share, so it cannot rebuild the keys.
-It can change or erase the `window.name` share, though:
-when the user comes back, the store may then load changed keys or no keys.
+It can change or erase the `window.name` share, though.
 In Chromium, a page that comes back from the back/forward cache gets its own `window.name` back,
 so the other site's changes have no effect.
 Firefox and WebKit clear `window.name` when the tab goes to another site.
 Firefox restores it when the user comes back. WebKit does not, so the store loses the keys.
+
+### Integrity check
+
+The sessionStorage share also holds a SHA-256 hash of the `window.name` share.
+When the page loads, the store removes both shares, then hashes the `window.name` share again.
+If the hashes do not match, it loads no keys.
+The hash does not cover the sessionStorage share.
+Shares saved by version 1.0.3 or older have no hash,
+so after an upgrade, each tab loses the keys that the old version saved.
+
+The `window.name` share holds 32 more random bytes than the XOR needs,
+so a disk reader cannot use the hash to confirm a guess of the keys.
 
 ## License
 
