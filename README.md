@@ -146,30 +146,36 @@ From the ProtonMail documentation:
 
 ### When the shares are written
 
-Recent versions of Chromium apply writes to `window.name` made while the page unloads
+This store does not wait for `unload` to write the `window.name` share.
+Chromium (tested in version 156) applies writes to `window.name` made while the page unloads
 (in `unload`, `pagehide` or `beforeunload`) one navigation late:
 the next page gets the value from one navigation earlier.
 
 To avoid this, the store writes the `window.name` share each time a key changes,
 and keeps the sessionStorage share in memory.
 It writes the sessionStorage share on `pagehide` (or when you call `persist()`),
-and removes it when the page loads or when a key changes,
-so that share spends little time on disk while the page is open.
-An empty store does not write to `window.name`.
+if `window.name` still holds its share.
+It removes the sessionStorage share when the page loads or when a key changes,
+so that share stays on disk only for a short time while the page is open.
+A store with no keys does not add a share to `window.name`,
+and removes its share when its last key goes.
+
+When the page comes back from the back/forward cache, it still holds the keys in memory.
+If `window.name` still holds its share, it writes new shares.
 
 When the store cannot reach `window.top.name` or sessionStorage
 (in a cross-origin iframe, or with storage blocked), it keeps keys in memory only.
 
 Chromium usually keeps `window.name` when the tab goes to another site,
 so that site can read the store name and the `window.name` share:
-random bytes as long as the stored JSON.
+base64 text of random bytes. Its length shows the size of the stored JSON.
 It cannot read the sessionStorage share, so it cannot rebuild the keys.
 It can change or erase the `window.name` share, though:
-when the user comes back, keys may then be corrupted or missing.
+when the user comes back, the store may then load changed keys or no keys.
 Firefox and WebKit clear `window.name` in that case.
-Firefox restores it when the user comes back, WebKit does not, so keys are lost there.
-None of this applies when the page comes back from the back/forward cache:
-it still holds the keys in memory and writes its shares again.
+Firefox restores it when the user comes back. WebKit does not, so the store loses the keys.
+In Chromium, this does not apply when the page comes back from the back/forward cache:
+the page gets its own `window.name` back and writes new shares.
 
 ## License
 
