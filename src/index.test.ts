@@ -301,19 +301,40 @@ describe('Persistence across page loads', () => {
     }
   )
 
-  test('forgets keys deleted after a failed write', () => {
+  test('leaves the store unchanged when a key cannot be saved', () => {
     const name = uniqueName()
     const store = new SK<any>({ name })
     store.set('foo', 'bar')
     const circular: any = {}
     circular.self = circular
     expect(() => store.set(circular, 'value')).toThrow()
-    expect(() => store.delete('foo')).toThrow()
-    try {
-      expect(reloadPage(name).get('foo')).toBeNull()
-    } finally {
-      store.delete(circular)
-    }
+    expect(store.get(circular)).toBeNull()
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('keeps the old value when a new value cannot be saved', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    const circular: any = {}
+    circular.self = circular
+    expect(() => store.set('foo', circular)).toThrow()
+    expect(store.get('foo')).toEqual('bar')
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('still deletes keys after rejecting a key that cannot be saved', () => {
+    const name = uniqueName()
+    const store = new SK<any>({ name })
+    store.set('foo', 'bar')
+    const circular: any = {}
+    circular.self = circular
+    expect(() => store.set(circular, 'value')).toThrow()
+    const deleted = jest.fn()
+    store.on('deleted', deleted)
+    store.delete('foo')
+    expect(deleted).toHaveBeenCalledWith({ name: 'foo' })
+    expect(reloadPage(name).get('foo')).toBeNull()
   })
 
   test('keeps restored keys when another store with the same name starts', () => {

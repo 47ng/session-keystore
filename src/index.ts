@@ -118,6 +118,9 @@ export default class SessionKeystore<Keys = string> {
       value,
       expiresAt: d
     }
+    // Throw before changing the store, so that it never holds an entry
+    // that later writes cannot serialize.
+    JSON.stringify([key, newItem])
     const oldItem = this.#store.get(key)
     this.#store.set(key, newItem)
     if (this._setTimeout(key) === 'expired') {
