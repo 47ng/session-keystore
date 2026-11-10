@@ -7,12 +7,16 @@ let storeCount = 0
 const uniqueName = () => `store-${++storeCount}`
 const storageKey = (name: string) => `session-keystore:${name}`
 
-function reloadPage(name: string) {
+function reloadPage(name: string, { lateWindowNameWrites = true } = {}) {
   const nameBeforeUnload = window.name
+  window.dispatchEvent(new Event('beforeunload'))
   window.dispatchEvent(new PageTransitionEvent('pagehide'))
   window.dispatchEvent(new Event('unload'))
-  // Chromium applies window.name writes made during unload one navigation late
-  window.name = nameBeforeUnload
+  if (lateWindowNameWrites) {
+    // Chromium: the next page does not see window.name writes made while
+    // the page unloads (beforeunload, pagehide or unload)
+    window.name = nameBeforeUnload
+  }
   return new SK({ name })
 }
 
@@ -265,6 +269,45 @@ describe('Persistence across page loads', () => {
     store.set('foo', 'bar')
     window.addEventListener('pagehide', () => store.clear(), { once: true })
     expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test('forgets keys deleted before its own pagehide listener runs', () => {
+    const name = uniqueName()
+    let store: SK | undefined
+    window.addEventListener('pagehide', () => store!.delete('foo'), {
+      once: true
+    })
+    store = new SK({ name })
+    store.set('foo', 'bar')
+    expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test.each([true, false])(
+    'forgets keys deleted in beforeunload (late window.name writes: %s)',
+    lateWindowNameWrites => {
+      const name = uniqueName()
+      const store = new SK({ name })
+      store.set('foo', 'bar')
+      store.set('egg', 'spam')
+      window.addEventListener('beforeunload', () => store.delete('foo'), {
+        once: true
+      })
+      const next = reloadPage(name, { lateWindowNameWrites })
+      expect(next.get('foo')).toBeNull()
+      // Chromium loses the whole store, other browsers keep the other keys
+      expect(next.get('egg')).toEqual(lateWindowNameWrites ? null : 'spam')
+    }
+  )
+
+  test('forgets all keys when a key is deleted in unload, even without late window.name writes', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('egg', 'spam')
+    window.addEventListener('unload', () => store.delete('foo'), { once: true })
+    const next = reloadPage(name, { lateWindowNameWrites: false })
+    expect(next.get('foo')).toBeNull()
+    expect(next.get('egg')).toBeNull()
   })
 
   test('restores keys when persist() runs while the page unloads', () => {

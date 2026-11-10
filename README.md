@@ -148,8 +148,10 @@ From the ProtonMail documentation:
 
 This store does not wait for `unload` to write the `window.name` share.
 Chromium applies writes to `window.name` made while the page unloads
-(in `unload`, `pagehide` or `beforeunload`) one navigation late (seen in version 156):
+(in `unload`, `pagehide` or `beforeunload`) one navigation late:
 the next page gets the value from one navigation earlier.
+This was [reported in Chromium 146](https://issues.chromium.org/issues/495842539)
+and still happens in version 156.
 
 To avoid this, the store writes the `window.name` share each time a key changes,
 and keeps the sessionStorage share in memory.
@@ -159,6 +161,14 @@ It removes the sessionStorage share when the page loads or when a key changes,
 so that share stays on disk only for a short time while the page is open.
 When a store loses its last key, it removes its share from `window.name`.
 A store with no keys does not add one.
+
+Avoid calling `set()`, `delete()` or `clear()` while the page unloads
+(in `beforeunload`, `pagehide` or `unload`), even for a missing key or an unchanged value.
+Reading a key that has expired has the same effect.
+In Chromium, the next page then loads no keys at all, not only the one that changed.
+Other browsers also lose the whole store if the call happens after the
+store's own `pagehide` listener has run (for example in `unload`).
+A key deleted or cleared while the page unloads never comes back.
 
 When the page comes back from the back/forward cache, it still holds the keys in memory.
 If `window.name` still holds its share, it removes the sessionStorage share,
