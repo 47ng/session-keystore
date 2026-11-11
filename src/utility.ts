@@ -22,16 +22,16 @@ export const split = (secret: string): [string, string] => {
   const data = utf8.encode(secret)
   const pad = randomBytes(data.length + SALT_LENGTH)
   const windowNameHalf = b64.encode(pad)
-  const encrypted = b64.encode(xor(data, pad))
-  return [windowNameHalf, `${encrypted}.${hashOf(windowNameHalf)}`]
+  const ciphertext = b64.encode(xor(data, pad))
+  return [windowNameHalf, `${ciphertext}.${hashOf(windowNameHalf)}`]
 }
 
 export const join = (windowNameHalf: string, sessionStorageHalf: string) => {
-  const [encrypted, expectedHash] = sessionStorageHalf.split('.')
+  const [ciphertext, expectedHash] = sessionStorageHalf.split('.')
   if (expectedHash !== hashOf(windowNameHalf)) {
     return null
   }
-  return utf8.decode(xor(b64.decode(encrypted), b64.decode(windowNameHalf)))
+  return utf8.decode(xor(b64.decode(ciphertext), b64.decode(windowNameHalf)))
 }
 
 // --

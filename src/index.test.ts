@@ -473,10 +473,10 @@ describe('Persistence across page loads', () => {
     new SK({ name }).set('foo', 'bar')
     window.dispatchEvent(new PageTransitionEvent('pagehide'))
     const sessionStorageHalf = window.sessionStorage.getItem(storageKey(name))!
-    const [encrypted] = sessionStorageHalf.split('.')
+    const [ciphertext] = sessionStorageHalf.split('.')
     const correctGuess = utf8.encode('[["foo",{"v":1,"value":"bar"}]]')
     const guessedWindowNameHalf = b64.encode(
-      b64.decode(encrypted).map((byte, i) => byte ^ correctGuess[i])
+      b64.decode(ciphertext).map((byte, i) => byte ^ correctGuess[i])
     )
     const guessedHash = b64.encode(hash(utf8.encode(guessedWindowNameHalf)))
     expect(sessionStorageHalf).not.toContain(guessedHash)
