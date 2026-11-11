@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/47ng/session-keystore"
+    "url": "git+https://github.com/47ng/session-keystore.git"
   },
   "files": [
     "dist"
@@ -39,11 +39,12 @@
     "lint": "oxlint --deny-warnings",
     "lint:commit": "commitlint --edit",
     "prepare": "git config --local --replace-all include.path ../git-hooks.gitconfig \"^\\\\.\\\\./git-hooks\\\\.gitconfig$\" || true",
+    "publint": "node scripts/publint.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "typecheck": "tsc",
-    "validate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm knip && pnpm build && pnpm test"
+    "validate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm knip && pnpm build && pnpm publint && pnpm test"
   },
   "dependencies": {
     "@47ng/codec": "^1.0.0",
@@ -60,6 +61,7 @@
     "knip": "^6.44.1",
     "oxfmt": "^0.76.0",
     "oxlint": "^1.91.0",
+    "publint": "^0.3.25",
     "semantic-release": "^25.0.9",
     "typescript": "7.0.2",
     "vite": "^8.3.5",
