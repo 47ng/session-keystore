@@ -1,47 +1,43 @@
 import { test, expect, type Page } from '@playwright/test'
-import { build } from 'esbuild'
+import { build, type Rolldown } from 'vite'
 
 const origin = 'https://keystore.test'
 
-const html = `<!doctype html>
-<script src="/keystore.js"></script>
-<script>
-  window.store = new SessionKeystore.default()
-  addEventListener('pageshow', event => {
-    window.restoredFromCache = event.persisted
-  })
-</script>`
-
-let bundle: string
+// Every path on the test origin serves the demo page, except its own assets
+let files: Map<string, { contentType: string; body: string | Uint8Array }>
 
 test.beforeAll(async () => {
-  const { outputFiles } = await build({
-    entryPoints: ['src/index.ts'],
-    bundle: true,
-    write: false,
-    format: 'iife',
-    globalName: 'SessionKeystore',
-    external: ['crypto']
-  })
-  bundle = outputFiles[0].text
+  const output = (await build({
+    root: 'demo',
+    logLevel: 'silent',
+    build: { write: false }
+  })) as Rolldown.RolldownOutput
+  files = new Map(
+    output.output.map(file => [
+      `/${file.fileName}`,
+      {
+        contentType: file.fileName.endsWith('.html')
+          ? 'text/html'
+          : 'text/javascript',
+        body: file.type === 'chunk' ? file.code : file.source
+      }
+    ])
+  )
 })
 
 test.beforeEach(async ({ context }) => {
   await context.route(`${origin}/**`, route => {
-    const isBundle = new URL(route.request().url()).pathname === '/keystore.js'
-    return route.fulfill(
-      isBundle
-        ? { contentType: 'text/javascript', body: bundle }
-        : { contentType: 'text/html', body: html }
-    )
+    const { pathname } = new URL(route.request().url())
+    const { contentType, body } = files.get(pathname) ?? files.get('/index.html')!
+    return route.fulfill({ contentType, body: Buffer.from(body) })
   })
 })
 
 const setKey = (page: Page, key: string, value: string) =>
-  page.evaluate(([k, v]) => (window as any).store.set(k, v), [key, value])
+  page.evaluate(([k, v]) => window.store.set(k, v), [key, value])
 
 const getKey = (page: Page, key: string) =>
-  page.evaluate(k => (window as any).store.get(k), key)
+  page.evaluate(k => window.store.get(k), key)
 
 test('keeps keys across a reload', async ({ page }) => {
   await page.goto(origin)
@@ -79,7 +75,7 @@ test('keeps keys after a back/forward cache restore', async ({
   await setKey(page, 'foo', 'bar')
   await page.goto(`${origin}/other`)
   await page.goBack({ waitUntil: 'commit' })
-  await page.waitForFunction(() => (window as any).restoredFromCache === true)
+  await page.waitForFunction(() => window.restoredFromCache === true)
   await page.reload()
   expect(await getKey(page, 'foo')).toEqual('bar')
 })
@@ -96,9 +92,9 @@ test('does not bring back a key deleted on another page after a back/forward cac
   await setKey(page, 'foo', 'bar')
   await page.goto(`${origin}/other`)
   expect(await getKey(page, 'foo')).toEqual('bar')
-  await page.evaluate(() => (window as any).store.delete('foo'))
+  await page.evaluate(() => window.store.delete('foo'))
   await page.goBack({ waitUntil: 'commit' })
-  await page.waitForFunction(() => (window as any).restoredFromCache === true)
+  await page.waitForFunction(() => window.restoredFromCache === true)
   await page.reload()
   expect(await getKey(page, 'foo')).toBeNull()
 })
@@ -122,7 +118,7 @@ test('ignores window.name changes from another site after a back/forward cache r
   await setKey(page, 'foo', 'bar')
   await page.goto(otherSite)
   await page.goBack({ waitUntil: 'commit' })
-  await page.waitForFunction(() => (window as any).restoredFromCache === true)
+  await page.waitForFunction(() => window.restoredFromCache === true)
   await page.reload()
   expect(await getKey(page, 'foo')).toEqual('bar')
 })
@@ -161,7 +157,7 @@ test('ignores keys another site changes in window.name', async ({
   await page.goto(origin)
   await setKey(page, 'apiKey', 'secret')
   await page.goto(otherSite)
-  expect(await page.evaluate(() => (window as any).changed)).toBe(true)
+  expect(await page.evaluate(() => 'changed' in window)).toBe(true)
   await page.goto(origin)
   expect(await getKey(page, 'apiKey')).toBeNull()
 })
@@ -177,7 +173,7 @@ test('works in memory inside a cross-origin iframe', async ({ page }) => {
   await page.goto(parentOrigin)
   const frame = page.frame({ url: `${origin}/` })!
   const value = await frame.evaluate(() => {
-    const store = (window as any).store
+    const store = window.store
     store.set('foo', 'bar')
     return store.get('foo')
   })
@@ -200,4 +196,17 @@ test('shows another site no key material in window.name', async ({ page }) => {
     Buffer.from(half, 'base64url').toString('latin1')
   )
   expect([windowName, ...decodedHalves].join()).not.toContain('secret')
+})
+
+test('demo page lists its keys after a reload', async ({ page }) => {
+  await page.goto(origin)
+  const keys = page.locator('#keys')
+  await expect(keys).toHaveText('foo: null\nbar: null')
+  await page.getByRole('button', { name: 'Set foo' }).click()
+  await expect(keys).toHaveText(/^foo: "[\da-f-]{36}"\nbar: null$/)
+  const listed = await keys.textContent()
+  await page.reload()
+  await expect(keys).toHaveText(listed!)
+  await page.getByRole('button', { name: 'Clear keys' }).click()
+  await expect(keys).toHaveText('foo: null\nbar: null')
 })

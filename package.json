@@ -31,6 +31,7 @@
     "access": "public"
   },
   "scripts": {
+    "demo": "vite demo",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
@@ -50,9 +51,9 @@
     "@vitest/browser-playwright": "^5.1.0",
     "commitlint": "^11.0.0",
     "conventional-changelog-conventionalcommits": "^10.4.1",
-    "esbuild": "0.28.2",
     "semantic-release": "^25.0.9",
     "typescript": "7.0.2",
+    "vite": "^8.3.5",
     "vitest": "^5.1.0"
   },
   "prettier": {
