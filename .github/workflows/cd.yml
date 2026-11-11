@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# One release at a time: a second push to master waits for the first
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   cd:
     name: Continuous Delivery

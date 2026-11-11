@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or PR replaces the run in progress
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: Continuous Integration
@@ -32,7 +37,7 @@ jobs:
         name: Validate
       - run: pnpm test:e2e
         name: Run end-to-end tests
-      - uses: 47ng/actions-slack-notify@main
+      - uses: 47ng/actions-slack-notify@df42545060c07ca99a040d0a520ab8457ce3c222 # main
         name: Notify on Slack
         if: always()
         with:
