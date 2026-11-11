@@ -37,6 +37,8 @@
     "format:check": "oxfmt --check",
     "knip": "knip",
     "lint": "oxlint --deny-warnings",
+    "lint:commit": "commitlint --edit",
+    "prepare": "git config --local --replace-all include.path ../git-hooks.gitconfig \"^\\\\.\\\\./git-hooks\\\\.gitconfig$\" || true",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
@@ -49,6 +51,8 @@
     "mitt": "^3.0.1"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@playwright/test": "1.64.1",
     "@types/node": "^24.19.2",
     "@vitest/browser-playwright": "^5.1.0",
