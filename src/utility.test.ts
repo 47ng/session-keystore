@@ -1,58 +1,57 @@
-import { b64, utf8 } from '@47ng/codec'
-import { split, join, readFromWindowName } from './utility'
+import { b64, utf8 } from "@47ng/codec";
+import { expect, test } from "vitest";
 
-const hashPart = (sessionStorageHalf: string) =>
-  sessionStorageHalf.split('.')[1]
+import { split, join, readFromWindowName } from "./utility.ts";
 
-test('Split / Join isomorphism', () => {
-  const expected = 'Hello, World !'
-  const [a, b] = split(expected)
-  const received = join(a, b)
-  expect(received).toEqual(expected)
-})
+const hashPart = (sessionStorageHalf: string) => sessionStorageHalf.split(".")[1];
 
-test('split gives a new hash each time for the same secret', () => {
-  const [, first] = split('Hello, World !')
-  const [, second] = split('Hello, World !')
-  expect(hashPart(first)).not.toEqual(hashPart(second))
-})
+test("Split / Join isomorphism", () => {
+  const expected = "Hello, World !";
+  const [a, b] = split(expected);
+  const received = join(a, b);
+  expect(received).toEqual(expected);
+});
 
-test('split adds 32 random bytes to the window.name half', () => {
-  const secret = '🔑'.repeat(20)
-  const [windowNameHalf] = split(secret)
-  expect(b64.decode(windowNameHalf).length).toEqual(
-    utf8.encode(secret).length + 32
-  )
-})
+test("split gives a new hash each time for the same secret", () => {
+  const [, first] = split("Hello, World !");
+  const [, second] = split("Hello, World !");
+  expect(hashPart(first)).not.toEqual(hashPart(second));
+});
 
-test('join rejects a changed window.name half', () => {
-  const [windowNameHalf, sessionStorageHalf] = split('Hello, World !')
-  const changed = b64.decode(windowNameHalf)
-  changed[0] ^= 1
-  expect(join(b64.encode(changed), sessionStorageHalf)).toBeNull()
-})
+test("split adds 32 random bytes to the window.top!.name half", () => {
+  const secret = "🔑".repeat(20);
+  const [windowNameHalf] = split(secret);
+  expect(b64.decode(windowNameHalf).length).toEqual(utf8.encode(secret).length + 32);
+});
 
-test('join rejects a window.name half from another split', () => {
-  const [, sessionStorageHalf] = split('Hello, World !')
-  const [otherWindowNameHalf] = split('Hello, World !')
-  expect(join(otherWindowNameHalf, sessionStorageHalf)).toBeNull()
-})
+test("join rejects a changed window.top!.name half", () => {
+  const [windowNameHalf, sessionStorageHalf] = split("Hello, World !");
+  const changed = b64.decode(windowNameHalf);
+  changed[0] ^= 1;
+  expect(join(b64.encode(changed), sessionStorageHalf)).toBeNull();
+});
 
-test('join rejects a window.name half cut to the length of the data', () => {
-  const secret = 'Hello, World !'
-  const [windowNameHalf, sessionStorageHalf] = split(secret)
-  const cut = b64.decode(windowNameHalf).slice(0, utf8.encode(secret).length)
-  expect(join(b64.encode(cut), sessionStorageHalf)).toBeNull()
-})
+test("join rejects a window.top!.name half from another split", () => {
+  const [, sessionStorageHalf] = split("Hello, World !");
+  const [otherWindowNameHalf] = split("Hello, World !");
+  expect(join(otherWindowNameHalf, sessionStorageHalf)).toBeNull();
+});
 
-test('readFromWindowName ignores a half that is not a string', () => {
-  window.name = JSON.stringify({ store: ['half'] })
-  expect(readFromWindowName('store')).toBeNull()
-  window.name = ''
-})
+test("join rejects a window.top!.name half cut to the length of the data", () => {
+  const secret = "Hello, World !";
+  const [windowNameHalf, sessionStorageHalf] = split(secret);
+  const cut = b64.decode(windowNameHalf).slice(0, utf8.encode(secret).length);
+  expect(join(b64.encode(cut), sessionStorageHalf)).toBeNull();
+});
 
-test('join rejects a sessionStorage half without a hash', () => {
-  const [windowNameHalf, sessionStorageHalf] = split('Hello, World !')
-  const [withoutHash] = sessionStorageHalf.split('.')
-  expect(join(windowNameHalf, withoutHash)).toBeNull()
-})
+test("readFromWindowName ignores a half that is not a string", () => {
+  window.top!.name = JSON.stringify({ store: ["half"] });
+  expect(readFromWindowName("store")).toBeNull();
+  window.top!.name = "";
+});
+
+test("join rejects a sessionStorage half without a hash", () => {
+  const [windowNameHalf, sessionStorageHalf] = split("Hello, World !");
+  const [withoutHash] = sessionStorageHalf.split(".");
+  expect(join(windowNameHalf, withoutHash)).toBeNull();
+});

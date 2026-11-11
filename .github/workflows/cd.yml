@@ -4,27 +4,42 @@ on:
   push:
     branches:
       - master
+      - beta # Prereleases on the `beta` dist-tag
+
+permissions:
+  contents: read
+
+# One release at a time, across master and beta
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   cd:
     name: Continuous Delivery
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # No cache reads or writes: a poisoned cache must not reach a release
+    cache-mode: none
+    permissions:
+      contents: write # Tags and GitHub releases
+      issues: write # Comments on released issues
+      pull-requests: write # Comments on released pull requests
+      id-token: write # npm trusted publishing, with provenance
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22.x
-          cache: yarn
-      - run: yarn install --ignore-scripts
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
         name: Install dependencies
-      - run: yarn build
+      - run: pnpm build
         name: Build package
-
-      # Continuous Delivery Pipeline --
-
-      - uses: docker://ghcr.io/codfish/semantic-release-action@sha256:16ab6c16b1bff6bebdbcc6cfc07dfafff49d23c6818490500b8edb3babfff29e
+      - run: pnpm exec semantic-release
         name: Semantic Release
-        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

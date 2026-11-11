@@ -2,8 +2,10 @@
   "name": "session-keystore",
   "version": "0.0.0-semantically-released",
   "description": "Secure cryptographic key storage in the browser",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "keywords": [
+    "key-storage",
+    "session-storage"
+  ],
   "license": "MIT",
   "author": {
     "name": "François Best",
@@ -14,71 +16,70 @@
     "type": "git",
     "url": "https://github.com/47ng/session-keystore"
   },
-  "keywords": [
-    "key-storage",
-    "session-storage"
+  "files": [
+    "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
-    "build:clean": "rm -rf ./dist",
-    "build:ts": "tsc",
-    "build": "run-s build:clean build:ts",
-    "ci": "run-s build test",
-    "test:e2e": "playwright test"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "demo": "vite demo",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "knip": "knip",
+    "lint": "oxlint --deny-warnings",
+    "lint:commit": "commitlint --edit",
+    "prepare": "git config --local --replace-all include.path ../git-hooks.gitconfig \"^\\\\.\\\\./git-hooks\\\\.gitconfig$\" || true",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "typecheck": "tsc",
+    "validate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm knip && pnpm build && pnpm test"
   },
   "dependencies": {
     "@47ng/codec": "^1.0.0",
     "@stablelib/sha256": "1.0.1",
-    "mitt": "^2.1.0"
+    "mitt": "^3.0.1"
   },
   "devDependencies": {
-    "@commitlint/config-conventional": "^11.0.0",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@playwright/test": "1.64.1",
-    "@types/jest": "^26.0.15",
-    "@types/node": "^14.14.5",
-    "commitlint": "^11.0.0",
-    "esbuild": "0.28.2",
-    "husky": "4.x",
-    "jest": "^26.6.1",
-    "npm-run-all": "^4.1.5",
-    "ts-jest": "^26.4.3",
-    "ts-node": "^9.0.0",
-    "typescript": "^4.0.5"
-  },
-  "browser": {
-    "crypto": false
-  },
-  "jest": {
-    "verbose": true,
-    "preset": "ts-jest/presets/js-with-ts",
-    "testEnvironment": "./test/browser.env.js",
-    "testPathIgnorePatterns": [
-      "/node_modules/",
-      "/e2e/"
-    ]
-  },
-  "prettier": {
-    "arrowParens": "avoid",
-    "semi": false,
-    "singleQuote": true,
-    "tabWidth": 2,
-    "trailingComma": "none",
-    "useTabs": false
-  },
-  "husky": {
-    "hooks": {
-      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
-    }
+    "@types/node": "^26.6.6",
+    "@vitest/browser-playwright": "^5.1.0",
+    "conventional-changelog-conventionalcommits": "^9.3.1",
+    "knip": "^6.44.1",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "semantic-release": "^25.0.9",
+    "typescript": "7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   },
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
     ],
     "rules": {
+      "body-leading-blank": [
+        2,
+        "always",
+        true
+      ],
+      "subject-case": [
+        0,
+        "always",
+        "sentence-case"
+      ],
       "type-enum": [
         2,
         "always",
@@ -96,17 +97,33 @@
           "style",
           "test"
         ]
-      ],
-      "subject-case": [
-        0,
-        "always",
-        "sentence-case"
-      ],
-      "body-leading-blank": [
-        2,
-        "always",
-        true
       ]
     }
-  }
+  },
+  "release": {
+    "branches": [
+      "master",
+      {
+        "name": "beta",
+        "prerelease": true
+      }
+    ],
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      [
+        "@semantic-release/release-notes-generator",
+        {
+          "preset": "conventionalcommits"
+        }
+      ],
+      "@semantic-release/npm",
+      "@semantic-release/github"
+    ]
+  },
+  "packageManager": "pnpm@12.10.1"
 }

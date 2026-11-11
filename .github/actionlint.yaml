@@ -1,0 +1,5 @@
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      # actionlint does not know `cache-mode` yet: rhysd/actionlint#762
+      - 'unexpected key "cache-mode" for "job" section'

@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/knip/schema-jsonc.json",
+  // The package entry (knip cannot map `exports` in dist back to src),
+  // and the demo script, loaded from demo/index.html
+  "entry": ["src/index.ts", "demo/main.ts"],
+  // Loaded by name by semantic-release (`preset: conventionalcommits`)
+  "ignoreDependencies": ["conventional-changelog-conventionalcommits"],
+}

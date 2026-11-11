@@ -1,0 +1,25 @@
+# Git hooks, configured for Git 2.54+ (config-based hooks).
+# `pnpm install` includes this file from .git/config (see `prepare`).
+# Linked worktrees share that config, so they use the main checkout's copy.
+# List them with `git hook list pre-commit`, turn one off with
+# `git config set hook.knip.enabled false`.
+
+[hook "typecheck"]
+	event = pre-commit
+	command = pnpm -s typecheck
+
+[hook "lint"]
+	event = pre-commit
+	command = pnpm -s lint
+
+[hook "format"]
+	event = pre-commit
+	command = pnpm -s format:check || (echo 'Run `pnpm format`, then stage the changes' && exit 1)
+
+[hook "knip"]
+	event = pre-commit
+	command = pnpm -s knip
+
+[hook "commitlint"]
+	event = commit-msg
+	command = pnpm -s lint:commit

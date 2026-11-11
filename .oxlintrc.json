@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "env": { "browser": true },
+  "rules": {
+    "no-underscore-dangle": "off",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/require-to-throw-message": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "e2e/**"],
+      "rules": {
+        "no-new": "off",
+        "no-await-in-loop": "off"
+      }
+    }
+  ]
+}

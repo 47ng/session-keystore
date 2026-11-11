@@ -1,11 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>session-keystore demo</title>
   </head>
-  <body id="react-root"></body>
-  <script src="./demo.tsx"></script>
+  <body>
+    <main>
+      <h1>session-keystore</h1>
+      <p>
+        Keys stay across reloads in this tab. A new tab, or another site reading
+        <code>window.name</code>, gets nothing.
+      </p>
+      <button type="button" id="set-foo">Set foo</button>
+      <button type="button" id="set-bar">Set bar (expires in 3 s)</button>
+      <button type="button" id="clear">Clear keys</button>
+      <button type="button" id="reload">Reload</button>
+      <pre id="keys"></pre>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
 </html>

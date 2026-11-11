@@ -34,30 +34,30 @@ $ npm i session-keystore
 ## Usage
 
 ```ts
-import SessionKeystore from 'session-keystore'
+import SessionKeystore from "session-keystore";
 
 // Create a store
-const store = new SessionKeystore()
+const store = new SessionKeystore();
 
 // You can create multiple stores, but give them a unique name:
 // (default name is 'default')
-const otherStore = new SessionKeystore({ name: 'other' })
+const otherStore = new SessionKeystore({ name: "other" });
 
 // Save a session-bound key
-store.set('foo', 'supersecret')
+store.set("foo", "supersecret");
 
 // Set an expiration date (Date or timestamp in ms)
-store.set('bar', 'supersecret', Date.now() + 1000 * 60 * 5) // 5 minutes
+store.set("bar", "supersecret", Date.now() + 1000 * 60 * 5); // 5 minutes
 
 // Retrieve the key
-const key = store.get('bar')
+const key = store.get("bar");
 // key will be null if it has expired
 
 // Revoke a single key
-store.delete('foo')
+store.delete("foo");
 
 // Clear all keys in storage
-store.clear()
+store.clear();
 ```
 
 ## CRUD Event Emitter
@@ -73,14 +73,14 @@ Event types:
 Listen to events on a keystore with the `on` method:
 
 ```ts
-import SessionKeystore from 'session-keystore'
+import SessionKeystore from "session-keystore";
 
-const store = new SessionKeystore()
-store.on('created', ({ name }) => console.log('Key created: ', name))
-store.on('updated', ({ name }) => console.log('Key updated: ', name))
-store.on('deleted', ({ name }) => console.log('Key deleted: ', name))
-store.on('expired', ({ name }) => console.log('Key expired: ', name))
-store.on('read', ({ name }) => console.log('Key accessed: ', name))
+const store = new SessionKeystore();
+store.on("created", ({ name }) => console.log("Key created: ", name));
+store.on("updated", ({ name }) => console.log("Key updated: ", name));
+store.on("deleted", ({ name }) => console.log("Key deleted: ", name));
+store.on("expired", ({ name }) => console.log("Key expired: ", name));
+store.on("read", ({ name }) => console.log("Key accessed: ", name));
 ```
 
 Note: `deleted` will be called when the key has been manually deleted,
@@ -94,13 +94,13 @@ NOT be called, and `expired` will be called instead.
 `session-keystore` is written in TypeScript. You can tell a store about the keys it is supposed to hold:
 
 ```ts
-import SessionKeystore from 'session-keystore'
+import SessionKeystore from "session-keystore";
 
-const store = new SessionKeystore<'foo' | 'bar'>()
+const store = new SessionKeystore<"foo" | "bar">();
 
-store.get('foo') // ok
-store.get('bar') // ok
-store.get('egg') // Error: Argument of type '"egg"' is not assignable to parameter of type '"foo" | "bar"'
+store.get("foo"); // ok
+store.get("bar"); // ok
+store.get("egg"); // Error: Argument of type '"egg"' is not assignable to parameter of type '"foo" | "bar"'
 ```
 
 This can be handy if you have multiple stores, to avoid accidental key leakage.
