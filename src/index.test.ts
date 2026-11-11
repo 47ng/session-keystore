@@ -1,5 +1,56 @@
+import { b64, utf8 } from '@47ng/codec'
+import { hash } from '@stablelib/sha256'
 import SK from './index'
-import { split, saveToWindowName } from './utility'
+import { split, join, saveToWindowName } from './utility'
+
+let storeCount = 0
+const uniqueName = () => `store-${++storeCount}`
+const storageKey = (name: string) => `session-keystore:${name}`
+
+function reloadPage(name: string, { lateWindowNameWrites = true } = {}) {
+  const nameBeforeUnload = window.name
+  window.dispatchEvent(new Event('beforeunload'))
+  window.dispatchEvent(new PageTransitionEvent('pagehide'))
+  window.dispatchEvent(new Event('unload'))
+  if (lateWindowNameWrites) {
+    // Chromium: the next page does not see window.name writes made while
+    // the page unloads (beforeunload, pagehide or unload)
+    window.name = nameBeforeUnload
+  }
+  return new SK({ name })
+}
+
+// Leave for another same-origin page that uses the store, then come back
+// from the back/forward cache. Chromium gives the page its own window.name back.
+function visitAnotherPage(name: string, onOtherPage: (store: SK) => void) {
+  const nameOnThisPage = window.name
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
+  onOtherPage(new SK({ name }))
+  window.name = nameOnThisPage
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+}
+
+function restoreFromBackForwardCache() {
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+}
+
+function xorIntoWindowNameHalf(name: string, from: string, to: string) {
+  const halves = JSON.parse(window.name)
+  const half = b64.decode(halves[storageKey(name)])
+  const [fromBytes, toBytes] = [utf8.encode(from), utf8.encode(to)]
+  fromBytes.forEach((byte, i) => {
+    half[i] ^= byte ^ toBytes[i]
+  })
+  halves[storageKey(name)] = b64.encode(half)
+  window.name = JSON.stringify(halves)
+}
+
+function readPersistedJson(name: string) {
+  const windowNameHalf = JSON.parse(window.name)[storageKey(name)]
+  const sessionStorageHalf = window.sessionStorage.getItem(storageKey(name))
+  return join(windowNameHalf, sessionStorageHalf!)
+}
 
 test('Store with default name', () => {
   const store = new SK()
@@ -159,6 +210,308 @@ test('Persistence', () => {
   storeA.persist()
   const storeB = new SK()
   expect(storeB.get('foo')).toEqual('bar')
+})
+
+describe('Persistence across page loads', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+    window.name = ''
+  })
+
+  test('restores keys after a reload', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('restores keys after several reloads without changes', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    reloadPage(name)
+    reloadPage(name)
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('restores the latest value of an updated key', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('foo', 'egg')
+    expect(reloadPage(name).get('foo')).toEqual('egg')
+  })
+
+  test('restores a new expiration date on an unchanged value', () => {
+    const name = uniqueName()
+    const expiresAt = Date.now() + 1000
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('foo', 'bar', expiresAt)
+    const reloaded = reloadPage(name)
+    expect(reloaded.get('foo')).toEqual('bar')
+    expect(reloaded.get('foo', expiresAt)).toBeNull()
+  })
+
+  test('forgets deleted keys', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('egg', 'spam')
+    store.delete('foo')
+    const reloaded = reloadPage(name)
+    expect(reloaded.get('foo')).toBeNull()
+    expect(reloaded.get('egg')).toEqual('spam')
+  })
+
+  test('does not persist expired keys', () => {
+    jest.useFakeTimers()
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'secret', Date.now() + 100)
+    store.set('egg', 'spam')
+    jest.advanceTimersByTime(150)
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    expect(readPersistedJson(name)).not.toContain('secret')
+  })
+
+  test('forgets keys cleared while the page unloads', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    window.addEventListener('pagehide', () => store.clear(), { once: true })
+    expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test('forgets keys deleted before its own pagehide listener runs', () => {
+    const name = uniqueName()
+    let store: SK | undefined
+    window.addEventListener('pagehide', () => store!.delete('foo'), {
+      once: true
+    })
+    store = new SK({ name })
+    store.set('foo', 'bar')
+    expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test.each([true, false])(
+    'forgets keys deleted in beforeunload (late window.name writes: %s)',
+    lateWindowNameWrites => {
+      const name = uniqueName()
+      const store = new SK({ name })
+      store.set('foo', 'bar')
+      store.set('egg', 'spam')
+      window.addEventListener('beforeunload', () => store.delete('foo'), {
+        once: true
+      })
+      const next = reloadPage(name, { lateWindowNameWrites })
+      expect(next.get('foo')).toBeNull()
+      // Chromium loses the whole store, other browsers keep the other keys
+      expect(next.get('egg')).toEqual(lateWindowNameWrites ? null : 'spam')
+    }
+  )
+
+  test('forgets all keys when a key is deleted in unload, even without late window.name writes', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('egg', 'spam')
+    window.addEventListener('unload', () => store.delete('foo'), { once: true })
+    const next = reloadPage(name, { lateWindowNameWrites: false })
+    expect(next.get('foo')).toBeNull()
+    expect(next.get('egg')).toBeNull()
+  })
+
+  test('restores keys when persist() runs while the page unloads', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    window.addEventListener('pagehide', () => store.persist(), { once: true })
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('leaves window.name alone while the store is empty', () => {
+    window.name = 'popup'
+    new SK({ name: uniqueName() }).delete('missing')
+    expect(window.name).toEqual('popup')
+  })
+
+  test('removes its window.name half once the store is empty', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.delete('foo')
+    expect(window.name).not.toContain(storageKey(name))
+  })
+
+  test.each(['123', 'null', 'true', '"popup"', '[]'])(
+    'works when window.name holds the JSON value %s',
+    value => {
+      window.name = value
+      const name = uniqueName()
+      const store = new SK({ name })
+      store.set('foo', 'bar')
+      expect(store.get('foo')).toEqual('bar')
+      expect(reloadPage(name).get('foo')).toEqual('bar')
+    }
+  )
+
+  test('leaves the store unchanged when a key cannot be saved', () => {
+    const name = uniqueName()
+    const store = new SK<any>({ name })
+    store.set('foo', 'bar')
+    const circular: any = {}
+    circular.self = circular
+    expect(() => store.set(circular, 'value')).toThrow()
+    expect(store.get(circular)).toBeNull()
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('keeps the old value when a new value cannot be saved', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    const circular: any = {}
+    circular.self = circular
+    expect(() => store.set('foo', circular)).toThrow()
+    expect(store.get('foo')).toEqual('bar')
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('still deletes keys after rejecting a key that cannot be saved', () => {
+    const name = uniqueName()
+    const store = new SK<any>({ name })
+    store.set('foo', 'bar')
+    const circular: any = {}
+    circular.self = circular
+    expect(() => store.set(circular, 'value')).toThrow()
+    const deleted = jest.fn()
+    store.on('deleted', deleted)
+    store.delete('foo')
+    expect(deleted).toHaveBeenCalledWith({ name: 'foo' })
+    expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test('keeps restored keys when another store with the same name starts', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    reloadPage(name)
+    new SK({ name })
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('keeps keys when another store with the same name starts', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    new SK({ name })
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('keeps keys when an empty store with the same name comes back from the back/forward cache', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    new SK({ name })
+    restoreFromBackForwardCache()
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('keeps stores with different names apart', () => {
+    const nameA = uniqueName()
+    const nameB = uniqueName()
+    new SK({ name: nameA }).set('foo', 'a')
+    new SK({ name: nameB }).set('foo', 'b')
+    reloadPage(nameA)
+    expect(reloadPage(nameA).get('foo')).toEqual('a')
+    expect(reloadPage(nameB).get('foo')).toEqual('b')
+  })
+
+  test('restores the last change among stores sharing a name', () => {
+    const name = uniqueName()
+    const first = new SK({ name })
+    const second = new SK({ name })
+    second.set('foo', 'second')
+    first.set('foo', 'first')
+    expect(reloadPage(name).get('foo')).toEqual('first')
+  })
+
+  test('keeps the sessionStorage half out of storage while the page is live', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+    reloadPage(name)
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+  })
+
+  test('forgets keys saved by version 1.0.3', () => {
+    const name = uniqueName()
+    const halvesFromVersion103 = {
+      windowName: 'ndqT0N7slCiLowiqPnhjg2QxZSQX3t0ZLiWPRlRM1A==',
+      sessionStorage: 'xoGxtrGDtgTwgX6IBElPoRJQCVFy_Oc7TET9ZCkRiQ=='
+    }
+    saveToWindowName(storageKey(name), halvesFromVersion103.windowName)
+    window.sessionStorage.setItem(
+      storageKey(name),
+      halvesFromVersion103.sessionStorage
+    )
+    expect(new SK({ name }).get('foo')).toBeNull()
+    expect(window.name).toEqual('')
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+  })
+
+  test('forgets keys after another site changes the window.name half', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    xorIntoWindowNameHalf(
+      name,
+      '[["foo",{"v":1,"value":"bar"}]]',
+      '[["foo",{"v":1,"value":"baz"}]]'
+    )
+    expect(new SK({ name }).get('foo')).toBeNull()
+  })
+
+  test('gives a disk reader no way to confirm a guess of the keys', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    const sessionStorageHalf = window.sessionStorage.getItem(storageKey(name))!
+    const [ciphertext] = sessionStorageHalf.split('.')
+    const correctGuess = utf8.encode('[["foo",{"v":1,"value":"bar"}]]')
+    const guessedWindowNameHalf = b64.encode(
+      b64.decode(ciphertext).map((byte, i) => byte ^ correctGuess[i])
+    )
+    const guessedHash = b64.encode(hash(utf8.encode(guessedWindowNameHalf)))
+    expect(sessionStorageHalf).not.toContain(guessedHash)
+  })
+
+  test('keeps keys after a back/forward cache restore when another page only read them', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    visitAnotherPage(name, other => other.get('foo'))
+    expect(store.get('foo')).toEqual('bar')
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('forgets keys after a back/forward cache restore when another page changed them', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('egg', 'spam')
+    const deleted = jest.fn()
+    store.on('deleted', deleted)
+    visitAnotherPage(name, other => other.delete('foo'))
+    expect(store.get('foo')).toBeNull()
+    expect(store.get('egg')).toBeNull()
+    expect(deleted).toHaveBeenCalledWith({ name: 'foo' })
+    expect(reloadPage(name).get('foo')).toBeNull()
+  })
+
+  test('removes the sessionStorage half when the page comes back from the back/forward cache', () => {
+    const name = uniqueName()
+    new SK({ name }).set('foo', 'bar')
+    restoreFromBackForwardCache()
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
 })
 
 test('v0 to v1 conversion', () => {

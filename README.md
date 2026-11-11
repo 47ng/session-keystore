@@ -144,6 +144,68 @@ From the ProtonMail documentation:
 > can't read the data since they can't access `window.name`. The lifetime
 > of the data is therefore the smaller lifetime, that of `window.name`.
 
+### When the shares are written
+
+This store does not wait for `unload` to write the `window.name` share.
+Chromium applies writes to `window.name` made while the page unloads
+(in `unload`, `pagehide` or `beforeunload`) one navigation late:
+the next page gets the value from one navigation earlier.
+This was [reported in Chromium 146](https://issues.chromium.org/issues/495842539)
+and still happens in version 156.
+
+To avoid this, the store writes the `window.name` share each time a key changes,
+and keeps the sessionStorage share in memory.
+It writes the sessionStorage share on `pagehide` (or when you call `persist()`),
+if `window.name` still holds its share.
+It removes the sessionStorage share when the page loads or when a key changes,
+so that share stays on disk only for a short time while the page is open.
+When a store loses its last key, it removes its share from `window.name`.
+A store with no keys does not add one.
+
+Avoid calling `set()`, `delete()` or `clear()` while the page unloads
+(in `beforeunload`, `pagehide` or `unload`), even for a missing key or an unchanged value.
+Reading a key that has expired has the same effect.
+In Chromium, the next page then loads no keys at all, not only the one that changed.
+Other browsers also lose the whole store if the call happens after the
+store's own `pagehide` listener has run (for example in `unload`).
+A key deleted or cleared while the page unloads never comes back.
+
+When the page comes back from the back/forward cache, it still holds the keys in memory.
+If another page changed the store in the meantime, the keys are out of date,
+so the store forgets them and emits `deleted` for each one:
+a key deleted on the other page does not come back.
+To tell, the store keeps a random revision ID in sessionStorage
+that changes each time a key is set, deleted or expires.
+Otherwise, if `window.name` still holds its share, it removes the sessionStorage share,
+writes a new `window.name` share and keeps the new sessionStorage share in memory.
+If not, it writes nothing until a key changes,
+and an old sessionStorage share can stay on disk until then.
+
+When the store cannot reach `window.top.name` or sessionStorage
+(in a cross-origin iframe, or with storage blocked), it keeps keys in memory only.
+
+Chromium usually keeps `window.name` when the tab goes to another site,
+so that site can read the store name and the `window.name` share:
+base64 text of random bytes. Its length shows the size of the stored JSON (the share holds 32 bytes more).
+It cannot read the sessionStorage share, so it cannot rebuild the keys.
+It can change or erase the `window.name` share, though.
+In Chromium, a page that comes back from the back/forward cache gets its own `window.name` back,
+so the other site's changes have no effect.
+Firefox and WebKit clear `window.name` when the tab goes to another site.
+Firefox restores it when the user comes back. WebKit does not, so the store loses the keys.
+
+### Integrity check
+
+The sessionStorage share also holds a SHA-256 hash of the `window.name` share.
+When the page loads, the store removes both shares, then hashes the `window.name` share again.
+If the hashes do not match, it loads no keys.
+The hash does not cover the sessionStorage share.
+Shares saved by version 1.x have no hash,
+so after an upgrade, each tab loses the keys that the old version saved.
+
+The `window.name` share holds 32 more random bytes than the XOR needs,
+so a disk reader cannot use the hash to confirm a guess of the keys.
+
 ## License
 
 [MIT](https://github.com/47ng/session-keystore/blob/master/LICENSE) - Made with ❤️ by [François Best](https://francoisbest.com)
