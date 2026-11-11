@@ -1,14 +1,8 @@
 import { b64, utf8 } from '@47ng/codec'
 import { hash } from '@stablelib/sha256'
 
-const randomBytes = (length: number): Uint8Array => {
-  if (typeof window === 'undefined') {
-    const crypto = require('crypto') // Node.js crypto module
-    return crypto.randomBytes(length)
-  } else {
-    return window.crypto.getRandomValues(new Uint8Array(length))
-  }
-}
+const randomBytes = (length: number) =>
+  crypto.getRandomValues(new Uint8Array(length))
 
 const SALT_LENGTH = 32
 
@@ -38,7 +32,7 @@ export const join = (windowNameHalf: string, sessionStorageHalf: string) => {
 
 export const canPersist = () => {
   try {
-    window.top.name
+    window.top!.name
     window.sessionStorage
     return true
   } catch {
@@ -48,7 +42,7 @@ export const canPersist = () => {
 
 const loadObjectFromWindowName = (): Record<string, unknown> => {
   try {
-    const saved = JSON.parse(window.top.name)
+    const saved = JSON.parse(window.top!.name)
     if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
       return saved
     }
@@ -59,7 +53,7 @@ const loadObjectFromWindowName = (): Record<string, unknown> => {
 export const saveToWindowName = (name: string, data: string) => {
   const obj = loadObjectFromWindowName()
   obj[name] = data
-  window.top.name = JSON.stringify(obj)
+  window.top!.name = JSON.stringify(obj)
 }
 
 export const readFromWindowName = (name: string) => {
@@ -74,5 +68,5 @@ export const removeFromWindowName = (name: string) => {
   }
   delete saved[name]
   const json = JSON.stringify(saved)
-  window.top.name = json === '{}' ? '' : json
+  window.top!.name = json === '{}' ? '' : json
 }

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { b64, utf8 } from '@47ng/codec'
-import { split, join, readFromWindowName } from './utility'
+import { split, join, readFromWindowName } from './utility.ts'
 
 const hashPart = (sessionStorageHalf: string) =>
   sessionStorageHalf.split('.')[1]

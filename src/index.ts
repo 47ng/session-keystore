@@ -1,4 +1,5 @@
-import mitt, { Emitter } from 'mitt'
+import mitt from 'mitt'
+import type { Emitter } from 'mitt'
 import {
   split,
   join,
@@ -6,7 +7,7 @@ import {
   saveToWindowName,
   readFromWindowName,
   removeFromWindowName
-} from './utility'
+} from './utility.ts'
 
 interface ExpirableKeyV0 {
   readonly key: string
@@ -38,7 +39,7 @@ export interface KeyEvent<Keys> {
   name: Keys
 }
 
-export interface EventMap<Keys> {
+export type EventMap<Keys> = {
   created: KeyEvent<Keys>
   read: KeyEvent<Keys>
   updated: KeyEvent<Keys>
@@ -63,9 +64,9 @@ export default class SessionKeystore<Keys = string> {
   readonly name: string
   readonly #storageKey: string
   readonly #revisionKey: string
-  #emitter: Emitter
+  #emitter: Emitter<EventMap<Keys>>
   #store: Map<Keys, ExpirableKeyV1>
-  #timeouts: Map<Keys, any>
+  #timeouts: Map<Keys, ReturnType<typeof setTimeout>>
   #halves: { windowName: string; sessionStorage: string } | null = null
   #revision: string | null = null
   readonly #canPersist: boolean = false
@@ -109,12 +110,12 @@ export default class SessionKeystore<Keys = string> {
 
   // Returns an unsubscribe callback
   on<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
-    this.#emitter.on(event, callback as any)
-    return () => this.#emitter.off(event, callback as any)
+    this.#emitter.on(event, callback)
+    return () => this.#emitter.off(event, callback)
   }
 
   off<T extends EventTypes<Keys>>(event: T, callback: Callback<Keys, T>) {
-    this.#emitter.off(event, callback as any)
+    this.#emitter.off(event, callback)
   }
 
   // API --

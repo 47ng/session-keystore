@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import SK from './index'
+import SK from './index.ts'
 
 test('keeps keys in memory when sessionStorage is blocked', () => {
   vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {

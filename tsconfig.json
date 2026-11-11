@@ -1,43 +1,18 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "target": "es2018",
-    "module": "commonjs",
-    "lib": ["DOM", "DOM.Iterable"],
-    "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "paths": { "*": ["types/*"] },
-
-    // Strict Type-Checking Options
+    "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "module": "preserve",
+    "types": ["node"],
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictPropertyInitialization": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-
-    // Additional Checks
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-
-    "esModuleInterop": true,
-
-    // Experimental Options
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "skipLibCheck": true,
+    "noEmit": true
   },
-  "exclude": [
-    "./src/**/*.test.ts",
-    "./dist",
-    "./node_modules",
-    "./demo",
-    "./e2e",
-    "./playwright.config.ts",
-    "./test",
-    "./vitest.config.ts"
-  ]
+  "include": ["src", "test", "e2e", "*.config.ts"]
 }

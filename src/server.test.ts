@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import SK from './index'
+import SK from './index.ts'
 
 test('works without a window', () => {
   const store = new SK()

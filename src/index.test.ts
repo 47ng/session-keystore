@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { b64, utf8 } from '@47ng/codec'
 import { hash } from '@stablelib/sha256'
-import SK from './index'
-import { split, join, saveToWindowName } from './utility'
+import SK from './index.ts'
+import { split, join, saveToWindowName } from './utility.ts'
 
 let storeCount = 0
 const uniqueName = () => `store-${++storeCount}`
