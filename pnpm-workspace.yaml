@@ -1,0 +1,8 @@
+# Supply-chain hardening: wait a week before installing new releases,
+# and refuse versions published with weaker provenance than earlier ones.
+# Dependency build scripts are blocked by default (strictDepBuilds).
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+allowBuilds:
+  core-js: false # postinstall only prints a funding message
+  esbuild: false # works from its optional platform package without the script
