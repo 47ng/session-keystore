@@ -17,7 +17,8 @@ tabs or other sites. ESM only, published from `master` by semantic-release.
 
 Browsers: `pnpm exec playwright install --with-deps chromium firefox webkit`.
 Firefox and WebKit need system libraries; without them, run Chromium only
-and let CI cover the rest.
+and let CI cover the rest. CI runs in the Playwright container image, so
+bump its tag in `.github/workflows/ci.yml` along with `@playwright/test`.
 
 ## Conventions
 

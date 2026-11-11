@@ -20,6 +20,12 @@ jobs:
   ci:
     name: Continuous Integration
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Browsers and their system libraries come preinstalled, so CI needs no
+    # apt or browser downloads. Keep the tag in sync with @playwright/test.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --user 1001
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,8 +37,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         name: Install dependencies
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
-        name: Install browsers
       - run: pnpm validate
         name: Validate
       - run: pnpm test:e2e
