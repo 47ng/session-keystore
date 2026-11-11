@@ -2,18 +2,11 @@
   "name": "session-keystore",
   "version": "0.0.0-semantically-released",
   "description": "Secure cryptographic key storage in the browser",
-  "license": "MIT",
-  "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
+  "keywords": [
+    "key-storage",
+    "session-storage"
   ],
-  "sideEffects": false,
+  "license": "MIT",
   "author": {
     "name": "François Best",
     "email": "contact@francoisbest.com",
@@ -23,23 +16,32 @@
     "type": "git",
     "url": "https://github.com/47ng/session-keystore"
   },
-  "keywords": [
-    "key-storage",
-    "session-storage"
+  "files": [
+    "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "demo": "vite demo",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test:e2e": "playwright test",
-    "validate": "pnpm typecheck && pnpm lint && pnpm knip && pnpm build && pnpm test",
-    "typecheck": "tsc",
+    "demo": "vite demo",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "knip": "knip",
     "lint": "oxlint --deny-warnings",
-    "knip": "knip"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "typecheck": "tsc",
+    "validate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm knip && pnpm build && pnpm test"
   },
   "dependencies": {
     "@47ng/codec": "^1.0.0",
@@ -52,25 +54,28 @@
     "@vitest/browser-playwright": "^5.1.0",
     "conventional-changelog-conventionalcommits": "^10.4.1",
     "knip": "^6.44.1",
+    "oxfmt": "^0.76.0",
     "oxlint": "^1.91.0",
     "semantic-release": "^25.0.9",
     "typescript": "7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"
   },
-  "prettier": {
-    "arrowParens": "avoid",
-    "semi": false,
-    "singleQuote": true,
-    "tabWidth": 2,
-    "trailingComma": "none",
-    "useTabs": false
-  },
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
     ],
     "rules": {
+      "body-leading-blank": [
+        2,
+        "always",
+        true
+      ],
+      "subject-case": [
+        0,
+        "always",
+        "sentence-case"
+      ],
       "type-enum": [
         2,
         "always",
@@ -88,20 +93,17 @@
           "style",
           "test"
         ]
-      ],
-      "subject-case": [
-        0,
-        "always",
-        "sentence-case"
-      ],
-      "body-leading-blank": [
-        2,
-        "always",
-        true
       ]
     }
   },
-  "packageManager": "pnpm@12.10.1",
+  "prettier": {
+    "arrowParens": "avoid",
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "none",
+    "useTabs": false
+  },
   "release": {
     "branches": [
       "master"
@@ -122,5 +124,6 @@
       "@semantic-release/npm",
       "@semantic-release/github"
     ]
-  }
+  },
+  "packageManager": "pnpm@12.10.1"
 }
