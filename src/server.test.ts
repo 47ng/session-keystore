@@ -1,6 +1,4 @@
-/**
- * @jest-environment node
- */
+import { expect, test } from 'vitest'
 import SK from './index'
 
 test('works without a window', () => {

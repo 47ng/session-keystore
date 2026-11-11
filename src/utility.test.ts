@@ -1,3 +1,4 @@
+import { expect, test } from 'vitest'
 import { b64, utf8 } from '@47ng/codec'
 import { split, join, readFromWindowName } from './utility'
 
@@ -17,7 +18,7 @@ test('split gives a new hash each time for the same secret', () => {
   expect(hashPart(first)).not.toEqual(hashPart(second))
 })
 
-test('split adds 32 random bytes to the window.name half', () => {
+test('split adds 32 random bytes to the window.top!.name half', () => {
   const secret = '🔑'.repeat(20)
   const [windowNameHalf] = split(secret)
   expect(b64.decode(windowNameHalf).length).toEqual(
@@ -25,20 +26,20 @@ test('split adds 32 random bytes to the window.name half', () => {
   )
 })
 
-test('join rejects a changed window.name half', () => {
+test('join rejects a changed window.top!.name half', () => {
   const [windowNameHalf, sessionStorageHalf] = split('Hello, World !')
   const changed = b64.decode(windowNameHalf)
   changed[0] ^= 1
   expect(join(b64.encode(changed), sessionStorageHalf)).toBeNull()
 })
 
-test('join rejects a window.name half from another split', () => {
+test('join rejects a window.top!.name half from another split', () => {
   const [, sessionStorageHalf] = split('Hello, World !')
   const [otherWindowNameHalf] = split('Hello, World !')
   expect(join(otherWindowNameHalf, sessionStorageHalf)).toBeNull()
 })
 
-test('join rejects a window.name half cut to the length of the data', () => {
+test('join rejects a window.top!.name half cut to the length of the data', () => {
   const secret = 'Hello, World !'
   const [windowNameHalf, sessionStorageHalf] = split(secret)
   const cut = b64.decode(windowNameHalf).slice(0, utf8.encode(secret).length)
@@ -46,9 +47,9 @@ test('join rejects a window.name half cut to the length of the data', () => {
 })
 
 test('readFromWindowName ignores a half that is not a string', () => {
-  window.name = JSON.stringify({ store: ['half'] })
+  window.top!.name = JSON.stringify({ store: ['half'] })
   expect(readFromWindowName('store')).toBeNull()
-  window.name = ''
+  window.top!.name = ''
 })
 
 test('join rejects a sessionStorage half without a hash', () => {

@@ -36,6 +36,8 @@
     "./node_modules",
     "./demo",
     "./e2e",
-    "./playwright.config.ts"
+    "./playwright.config.ts",
+    "./test",
+    "./vitest.config.ts"
   ]
 }

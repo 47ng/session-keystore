@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { b64, utf8 } from '@47ng/codec'
 import { hash } from '@stablelib/sha256'
 import SK from './index'
@@ -8,25 +9,25 @@ const uniqueName = () => `store-${++storeCount}`
 const storageKey = (name: string) => `session-keystore:${name}`
 
 function reloadPage(name: string, { lateWindowNameWrites = true } = {}) {
-  const nameBeforeUnload = window.name
+  const nameBeforeUnload = window.top!.name
   window.dispatchEvent(new Event('beforeunload'))
   window.dispatchEvent(new PageTransitionEvent('pagehide'))
   window.dispatchEvent(new Event('unload'))
   if (lateWindowNameWrites) {
-    // Chromium: the next page does not see window.name writes made while
+    // Chromium: the next page does not see window.top!.name writes made while
     // the page unloads (beforeunload, pagehide or unload)
-    window.name = nameBeforeUnload
+    window.top!.name = nameBeforeUnload
   }
   return new SK({ name })
 }
 
 // Leave for another same-origin page that uses the store, then come back
-// from the back/forward cache. Chromium gives the page its own window.name back.
+// from the back/forward cache. Chromium gives the page its own window.top!.name back.
 function visitAnotherPage(name: string, onOtherPage: (store: SK) => void) {
-  const nameOnThisPage = window.name
+  const nameOnThisPage = window.top!.name
   window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
   onOtherPage(new SK({ name }))
-  window.name = nameOnThisPage
+  window.top!.name = nameOnThisPage
   window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
 }
 
@@ -36,18 +37,18 @@ function restoreFromBackForwardCache() {
 }
 
 function xorIntoWindowNameHalf(name: string, from: string, to: string) {
-  const halves = JSON.parse(window.name)
+  const halves = JSON.parse(window.top!.name)
   const half = b64.decode(halves[storageKey(name)])
   const [fromBytes, toBytes] = [utf8.encode(from), utf8.encode(to)]
   fromBytes.forEach((byte, i) => {
     half[i] ^= byte ^ toBytes[i]
   })
   halves[storageKey(name)] = b64.encode(half)
-  window.name = JSON.stringify(halves)
+  window.top!.name = JSON.stringify(halves)
 }
 
 function readPersistedJson(name: string) {
-  const windowNameHalf = JSON.parse(window.name)[storageKey(name)]
+  const windowNameHalf = JSON.parse(window.top!.name)[storageKey(name)]
   const sessionStorageHalf = window.sessionStorage.getItem(storageKey(name))
   return join(windowNameHalf, sessionStorageHalf!)
 }
@@ -65,8 +66,8 @@ test('Store with a name', () => {
 describe('Event handlers', () => {
   test('created/updated', () => {
     const store = new SK()
-    const created = jest.fn()
-    const updated = jest.fn()
+    const created = vi.fn()
+    const updated = vi.fn()
     store.on('created', created)
     store.on('updated', updated)
     store.set('foo', 'bar')
@@ -88,7 +89,7 @@ describe('Event handlers', () => {
 
   test('read', () => {
     const store = new SK()
-    const read = jest.fn()
+    const read = vi.fn()
     store.on('read', read)
     store.set('foo', 'bar')
     expect(read).not.toHaveBeenCalled()
@@ -99,7 +100,7 @@ describe('Event handlers', () => {
 
   test('deleted', () => {
     const store = new SK()
-    const deleted = jest.fn()
+    const deleted = vi.fn()
     store.on('deleted', deleted)
     store.set('foo', 'bar')
     store.get('foo')
@@ -111,8 +112,8 @@ describe('Event handlers', () => {
 
   test('expired', () => {
     const store = new SK()
-    const expired = jest.fn()
-    const deleted = jest.fn()
+    const expired = vi.fn()
+    const deleted = vi.fn()
     store.on('expired', expired)
     store.on('deleted', deleted)
     const expirationDate = Date.now() + 1000
@@ -127,7 +128,7 @@ describe('Event handlers', () => {
 
   test('Unsubscribe via returned off callback', () => {
     const store = new SK()
-    const read = jest.fn()
+    const read = vi.fn()
     const off = store.on('read', read)
     store.set('foo', 'bar')
     store.get('foo')
@@ -138,7 +139,7 @@ describe('Event handlers', () => {
 
   test('Unsubscribe via off method', () => {
     const store = new SK()
-    const read = jest.fn()
+    const read = vi.fn()
     store.on('read', read)
     store.set('foo', 'bar')
     store.get('foo')
@@ -149,8 +150,8 @@ describe('Event handlers', () => {
 
   test('By default, this is not bound to the store', () => {
     const store = new SK()
-    const nobind = jest.fn().mockReturnThis()
-    const bind = jest.fn().mockReturnThis()
+    const nobind = vi.fn().mockReturnThis()
+    const bind = vi.fn().mockReturnThis()
     store.on('created', nobind)
     store.on('created', bind.bind(store))
     store.set('foo', 'bar')
@@ -161,7 +162,7 @@ describe('Event handlers', () => {
 
 test('Clear', () => {
   const store = new SK()
-  const deleted = jest.fn()
+  const deleted = vi.fn()
   store.on('deleted', deleted)
   store.set('foo', 'bar')
   store.set('egg', 'spam')
@@ -176,27 +177,27 @@ test('Clear', () => {
 })
 
 test('Key expiration', () => {
-  jest.useFakeTimers()
+  vi.useFakeTimers()
   const store = new SK()
-  const expired = jest.fn()
-  const deleted = jest.fn()
+  const expired = vi.fn()
+  const deleted = vi.fn()
   store.on('expired', expired)
   store.on('deleted', deleted)
   store.set('foo', 'bar', Date.now() + 100)
   store.set('egg', 'qux', Date.now() + 200)
-  jest.advanceTimersByTime(150)
+  vi.advanceTimersByTime(150)
   expect(expired).toHaveBeenCalledTimes(1)
   expect(expired.mock.calls[0][0]).toEqual({ name: 'foo' })
   expect(store.get('foo')).toBeNull()
   expect(store.get('egg')).toEqual('qux')
   expect(deleted).not.toHaveBeenCalled()
-  jest.useRealTimers()
+  vi.useRealTimers()
 })
 
 test('Set a key that already expired', () => {
   const store = new SK()
-  const created = jest.fn()
-  const expired = jest.fn()
+  const created = vi.fn()
+  const expired = vi.fn()
   store.on('created', created)
   store.on('expired', expired)
   store.set('foo', 'bar', 0)
@@ -214,8 +215,8 @@ test('Persistence', () => {
 
 describe('Persistence across page loads', () => {
   afterEach(() => {
-    jest.useRealTimers()
-    window.name = ''
+    vi.useRealTimers()
+    window.top!.name = ''
   })
 
   test('restores keys after a reload', () => {
@@ -263,12 +264,12 @@ describe('Persistence across page loads', () => {
   })
 
   test('does not persist expired keys', () => {
-    jest.useFakeTimers()
+    vi.useFakeTimers()
     const name = uniqueName()
     const store = new SK({ name })
     store.set('foo', 'secret', Date.now() + 100)
     store.set('egg', 'spam')
-    jest.advanceTimersByTime(150)
+    vi.advanceTimersByTime(150)
     window.dispatchEvent(new PageTransitionEvent('pagehide'))
     expect(readPersistedJson(name)).not.toContain('secret')
   })
@@ -293,7 +294,7 @@ describe('Persistence across page loads', () => {
   })
 
   test.each([true, false])(
-    'forgets keys deleted in beforeunload (late window.name writes: %s)',
+    'forgets keys deleted in beforeunload (late window.top!.name writes: %s)',
     lateWindowNameWrites => {
       const name = uniqueName()
       const store = new SK({ name })
@@ -309,7 +310,7 @@ describe('Persistence across page loads', () => {
     }
   )
 
-  test('forgets all keys when a key is deleted in unload, even without late window.name writes', () => {
+  test('forgets all keys when a key is deleted in unload, even without late window.top!.name writes', () => {
     const name = uniqueName()
     const store = new SK({ name })
     store.set('foo', 'bar')
@@ -328,24 +329,24 @@ describe('Persistence across page loads', () => {
     expect(reloadPage(name).get('foo')).toEqual('bar')
   })
 
-  test('leaves window.name alone while the store is empty', () => {
-    window.name = 'popup'
+  test('leaves window.top!.name alone while the store is empty', () => {
+    window.top!.name = 'popup'
     new SK({ name: uniqueName() }).delete('missing')
-    expect(window.name).toEqual('popup')
+    expect(window.top!.name).toEqual('popup')
   })
 
-  test('removes its window.name half once the store is empty', () => {
+  test('removes its window.top!.name half once the store is empty', () => {
     const name = uniqueName()
     const store = new SK({ name })
     store.set('foo', 'bar')
     store.delete('foo')
-    expect(window.name).not.toContain(storageKey(name))
+    expect(window.top!.name).not.toContain(storageKey(name))
   })
 
   test.each(['123', 'null', 'true', '"popup"', '[]'])(
-    'works when window.name holds the JSON value %s',
+    'works when window.top!.name holds the JSON value %s',
     value => {
-      window.name = value
+      window.top!.name = value
       const name = uniqueName()
       const store = new SK({ name })
       store.set('foo', 'bar')
@@ -383,7 +384,7 @@ describe('Persistence across page loads', () => {
     const circular: any = {}
     circular.self = circular
     expect(() => store.set(circular, 'value')).toThrow()
-    const deleted = jest.fn()
+    const deleted = vi.fn()
     store.on('deleted', deleted)
     store.delete('foo')
     expect(deleted).toHaveBeenCalledWith({ name: 'foo' })
@@ -452,11 +453,11 @@ describe('Persistence across page loads', () => {
       halvesFromVersion103.sessionStorage
     )
     expect(new SK({ name }).get('foo')).toBeNull()
-    expect(window.name).toEqual('')
+    expect(window.top!.name).toEqual('')
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull()
   })
 
-  test('forgets keys after another site changes the window.name half', () => {
+  test('forgets keys after another site changes the window.top!.name half', () => {
     const name = uniqueName()
     new SK({ name }).set('foo', 'bar')
     window.dispatchEvent(new PageTransitionEvent('pagehide'))
@@ -496,7 +497,7 @@ describe('Persistence across page loads', () => {
     const store = new SK({ name })
     store.set('foo', 'bar')
     store.set('egg', 'spam')
-    const deleted = jest.fn()
+    const deleted = vi.fn()
     store.on('deleted', deleted)
     visitAnotherPage(name, other => other.delete('foo'))
     expect(store.get('foo')).toBeNull()
