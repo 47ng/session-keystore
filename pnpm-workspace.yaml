@@ -3,5 +3,3 @@
 # Dependency build scripts are blocked by default (strictDepBuilds).
 minimumReleaseAge: 10080
 trustPolicy: no-downgrade
-allowBuilds:
-  core-js: false # postinstall only prints a funding message

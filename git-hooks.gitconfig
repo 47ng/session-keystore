@@ -1,5 +1,6 @@
 # Git hooks, configured for Git 2.54+ (config-based hooks).
 # `pnpm install` includes this file from .git/config (see `prepare`).
+# Linked worktrees share that config, so they use the main checkout's copy.
 # List them with `git hook list pre-commit`, turn one off with
 # `git config set hook.knip.enabled false`.
 
