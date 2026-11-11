@@ -20,6 +20,16 @@ function reloadPage(name: string, { lateWindowNameWrites = true } = {}) {
   return new SK({ name })
 }
 
+// Leave for another same-origin page that uses the store, then come back
+// from the back/forward cache. Chromium gives the page its own window.name back.
+function visitAnotherPage(name: string, onOtherPage: (store: SK) => void) {
+  const nameOnThisPage = window.name
+  window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
+  onOtherPage(new SK({ name }))
+  window.name = nameOnThisPage
+  window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+}
+
 function restoreFromBackForwardCache() {
   window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
   window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
@@ -470,6 +480,29 @@ describe('Persistence across page loads', () => {
     )
     const guessedHash = b64.encode(hash(utf8.encode(guessedWindowNameHalf)))
     expect(sessionStorageHalf).not.toContain(guessedHash)
+  })
+
+  test('keeps keys after a back/forward cache restore when another page only read them', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    visitAnotherPage(name, other => other.get('foo'))
+    expect(store.get('foo')).toEqual('bar')
+    expect(reloadPage(name).get('foo')).toEqual('bar')
+  })
+
+  test('forgets keys after a back/forward cache restore when another page changed them', () => {
+    const name = uniqueName()
+    const store = new SK({ name })
+    store.set('foo', 'bar')
+    store.set('egg', 'spam')
+    const deleted = jest.fn()
+    store.on('deleted', deleted)
+    visitAnotherPage(name, other => other.delete('foo'))
+    expect(store.get('foo')).toBeNull()
+    expect(store.get('egg')).toBeNull()
+    expect(deleted).toHaveBeenCalledWith({ name: 'foo' })
+    expect(reloadPage(name).get('foo')).toBeNull()
   })
 
   test('removes the sessionStorage half when the page comes back from the back/forward cache', () => {

@@ -171,7 +171,12 @@ store's own `pagehide` listener has run (for example in `unload`).
 A key deleted or cleared while the page unloads never comes back.
 
 When the page comes back from the back/forward cache, it still holds the keys in memory.
-If `window.name` still holds its share, it removes the sessionStorage share,
+If another page changed the store in the meantime, the keys are out of date,
+so the store forgets them and emits `deleted` for each one:
+a key deleted on the other page does not come back.
+To tell, the store keeps a random revision ID in sessionStorage
+that changes each time a key is set, deleted or expires.
+Otherwise, if `window.name` still holds its share, it removes the sessionStorage share,
 writes a new `window.name` share and keeps the new sessionStorage share in memory.
 If not, it writes nothing until a key changes,
 and an old sessionStorage share can stay on disk until then.

@@ -62,10 +62,12 @@ export default class SessionKeystore<Keys = string> {
   // Members
   readonly name: string
   readonly #storageKey: string
+  readonly #revisionKey: string
   #emitter: Emitter
   #store: Map<Keys, ExpirableKeyV1>
   #timeouts: Map<Keys, any>
   #halves: { windowName: string; sessionStorage: string } | null = null
+  #revision: string | null = null
   readonly #canPersist: boolean = false
 
   // --
@@ -73,6 +75,7 @@ export default class SessionKeystore<Keys = string> {
   constructor(opts: ConstructorOptions = {}) {
     this.name = opts.name || 'default'
     this.#storageKey = `session-keystore:${this.name}`
+    this.#revisionKey = `${this.#storageKey}:revision`
     this.#emitter = mitt()
     this.#store = new Map()
     this.#timeouts = new Map()
@@ -82,12 +85,20 @@ export default class SessionKeystore<Keys = string> {
         this._load()
       } catch {}
       this.#canPersist = canPersist()
+      if (this.#canPersist) {
+        this.#revision = window.sessionStorage.getItem(this.#revisionKey)
+      }
       if (this.#store.size > 0) {
         this._writeWindowNameHalf()
       }
       window.addEventListener('pagehide', () => this._writeSessionStorageHalf())
       window.addEventListener('pageshow', event => {
-        if (event.persisted && this._ownsWindowName()) {
+        if (!event.persisted) {
+          return
+        }
+        if (this._changedElsewhere()) {
+          this._dropOutdatedKeys()
+        } else if (this._ownsWindowName()) {
           this._writeWindowNameHalf()
         }
       })
@@ -126,7 +137,7 @@ export default class SessionKeystore<Keys = string> {
     if (this._setTimeout(key) === 'expired') {
       return // Don't call created or updated
     }
-    this._writeWindowNameHalf()
+    this._saveChange()
     if (!oldItem) {
       this.#emitter.emit('created', { name: key })
     } else if (oldItem.value !== newItem.value) {
@@ -150,7 +161,7 @@ export default class SessionKeystore<Keys = string> {
   delete(key: Keys) {
     this._clearTimeout(key)
     this.#store.delete(key)
-    this._writeWindowNameHalf()
+    this._saveChange()
     this.#emitter.emit('deleted', { name: key })
   }
 
@@ -168,6 +179,38 @@ export default class SessionKeystore<Keys = string> {
       )
     }
     this._writeSessionStorageHalf()
+  }
+
+  private _saveChange() {
+    if (this.#canPersist) {
+      if (this.#store.size === 0) {
+        this.#revision = null
+        window.sessionStorage.removeItem(this.#revisionKey)
+      } else {
+        this.#revision = Math.random().toString(36).slice(2)
+        window.sessionStorage.setItem(this.#revisionKey, this.#revision)
+      }
+    }
+    this._writeWindowNameHalf()
+  }
+
+  private _changedElsewhere() {
+    return (
+      this.#canPersist &&
+      window.sessionStorage.getItem(this.#revisionKey) !== this.#revision
+    )
+  }
+
+  // Another page changed the store while this one was in the back/forward
+  // cache: forget the outdated keys and shares, without writing anything.
+  private _dropOutdatedKeys() {
+    this.#halves = null
+    this.#revision = window.sessionStorage.getItem(this.#revisionKey)
+    this.#store.forEach((_, key) => {
+      this._clearTimeout(key)
+      this.#store.delete(key)
+      this.#emitter.emit('deleted', { name: key })
+    })
   }
 
   private _writeWindowNameHalf() {
@@ -262,7 +305,7 @@ export default class SessionKeystore<Keys = string> {
   private _expired(key: Keys) {
     this._clearTimeout(key)
     this.#store.delete(key)
-    this._writeWindowNameHalf()
+    this._saveChange()
     this.#emitter.emit('expired', { name: key })
   }
 }

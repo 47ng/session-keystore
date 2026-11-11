@@ -84,6 +84,25 @@ test('keeps keys after a back/forward cache restore', async ({
   expect(await getKey(page, 'foo')).toEqual('bar')
 })
 
+test('does not bring back a key deleted on another page after a back/forward cache restore', async ({
+  page,
+  browserName
+}) => {
+  test.skip(
+    browserName !== 'chromium',
+    'Playwright turns off the back/forward cache in Firefox and WebKit'
+  )
+  await page.goto(origin)
+  await setKey(page, 'foo', 'bar')
+  await page.goto(`${origin}/other`)
+  expect(await getKey(page, 'foo')).toEqual('bar')
+  await page.evaluate(() => (window as any).store.delete('foo'))
+  await page.goBack({ waitUntil: 'commit' })
+  await page.waitForFunction(() => (window as any).restoredFromCache === true)
+  await page.reload()
+  expect(await getKey(page, 'foo')).toBeNull()
+})
+
 test('ignores window.name changes from another site after a back/forward cache restore', async ({
   page,
   browserName
