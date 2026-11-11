@@ -1,20 +1,30 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: npm # Includes pnpm
     directory: /
     schedule:
       interval: weekly
       time: "09:00"
       timezone: Europe/Paris
-    assignees:
-      - franky47
+    # Matches minimumReleaseAge in pnpm-workspace.yaml
     cooldown:
       default-days: 7
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    assignees:
+      - franky47
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
-    assignees:
-      - franky47
     cooldown:
       default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+    assignees:
+      - franky47
