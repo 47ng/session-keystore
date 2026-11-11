@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - master
+      - beta # Prereleases on the `beta` dist-tag
 
 permissions:
   contents: read
 
-# One release at a time: a second push to master waits for the first
+# One release at a time, across master and beta
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
