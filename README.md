@@ -200,7 +200,7 @@ The sessionStorage share also holds a SHA-256 hash of the `window.name` share.
 When the page loads, the store removes both shares, then hashes the `window.name` share again.
 If the hashes do not match, it loads no keys.
 The hash does not cover the sessionStorage share.
-Shares saved by version 1.0.3 or older have no hash,
+Shares saved by version 1.x have no hash,
 so after an upgrade, each tab loses the keys that the old version saved.
 
 The `window.name` share holds 32 more random bytes than the XOR needs,
