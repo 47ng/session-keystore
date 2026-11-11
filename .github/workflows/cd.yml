@@ -19,6 +19,8 @@ jobs:
     name: Continuous Delivery
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # No cache reads or writes: a poisoned cache must not reach a release
+    cache-mode: none
     permissions:
       contents: write # Tags and GitHub releases
       issues: write # Comments on released issues
@@ -33,7 +35,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
         name: Install dependencies
       - run: pnpm build
