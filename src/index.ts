@@ -10,29 +10,16 @@ import {
   removeFromWindowName,
 } from "./utility.ts";
 
-interface ExpirableKeyV0 {
-  readonly key: string;
-  readonly expiresAt?: number; // timestamp
-}
-
-interface ExpirableKeyV1 {
+interface ExpirableKey {
   v: 1;
   readonly value: string;
   readonly expiresAt?: number; // timestamp
 }
 
-const isExpirableKeyV0 = (entry: any): entry is ExpirableKeyV0 => {
-  return entry.v === undefined && !!entry.key;
-};
-const isExpirableKeyV1 = (entry: any): entry is ExpirableKeyV1 => {
-  return entry.v === 1 && !!entry.value;
-};
-
-const convertV0toV1 = (v0Entry: ExpirableKeyV0): ExpirableKeyV1 => ({
-  v: 1,
-  value: v0Entry.key,
-  expiresAt: v0Entry.expiresAt,
-});
+// The payload passed the hash check, so this store wrote it. Only its
+// format is checked: anything unexpected drops every key.
+const isPayload = <Keys>(data: unknown): data is [Keys, ExpirableKey][] =>
+  Array.isArray(data) && data.every(([, item]) => item?.v === 1 && typeof item.value === "string");
 
 // --
 
@@ -64,7 +51,7 @@ export default class SessionKeystore<Keys = string> {
   readonly #storageKey: string;
   readonly #revisionKey: string;
   #emitter: Emitter<EventMap<Keys>>;
-  #store: Map<Keys, ExpirableKeyV1>;
+  #store: Map<Keys, ExpirableKey>;
   #timeouts: Map<Keys, ReturnType<typeof setTimeout>>;
   #halves: { windowName: string; sessionStorage: string } | null = null;
   #revision: string | null = null;
@@ -124,7 +111,7 @@ export default class SessionKeystore<Keys = string> {
     if (expiresAt !== undefined) {
       d = typeof expiresAt === "number" ? expiresAt : expiresAt.valueOf();
     }
-    const newItem: ExpirableKeyV1 = {
+    const newItem: ExpirableKey = {
       v: 1,
       value,
       expiresAt: d,
@@ -248,20 +235,11 @@ export default class SessionKeystore<Keys = string> {
     if (!json) {
       return;
     }
-    const entries: [Keys, ExpirableKeyV1][] = JSON.parse(json);
-
-    this.#store = new Map(
-      entries.map(([key, item]) => {
-        if (isExpirableKeyV0(item)) {
-          return [key, convertV0toV1(item)];
-        }
-        if (isExpirableKeyV1(item)) {
-          return [key, item];
-        }
-        /* istanbul ignore next */
-        return [key, item];
-      }),
-    );
+    const entries: unknown = JSON.parse(json);
+    if (!isPayload<Keys>(entries)) {
+      return;
+    }
+    this.#store = new Map(entries);
     // Re-establish timeouts
     this.#store.forEach((_, key) => {
       this._setTimeout(key);

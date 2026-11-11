@@ -513,15 +513,23 @@ describe("Persistence across page loads", () => {
   });
 });
 
-test("v0 to v1 conversion", () => {
-  const future = Date.now() + 1000;
-  const json = JSON.stringify([["foo", { key: "bar", expiresAt: future }]]);
+test("drops every key when a saved entry has an unknown format", () => {
+  const json = JSON.stringify([
+    ["foo", { v: 1, value: "bar" }],
+    ["egg", { v: 2, value: "spam" }],
+  ]);
   const [a, b] = split(json);
   saveToWindowName(storageKey("default"), a);
   window.sessionStorage.setItem(storageKey("default"), b);
   const store = new SK();
-  expect(store.get("foo")).toEqual("bar");
-  expect(store.get("foo", future)).toBeNull();
+  expect(store.get("foo")).toBeNull();
+  expect(store.get("egg")).toBeNull();
+});
+
+test("keeps an empty value across a reload", () => {
+  const name = uniqueName();
+  new SK({ name }).set("foo", "");
+  expect(reloadPage(name).get("foo")).toEqual("");
 });
 
 test("Expiration date", () => {
