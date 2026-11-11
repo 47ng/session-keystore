@@ -1,4 +1,5 @@
 import { b64, utf8 } from '@47ng/codec'
+import { hash } from '@stablelib/sha256'
 
 const randomBytes = (length: number): Uint8Array => {
   if (typeof window === 'undefined') {
@@ -9,37 +10,48 @@ const randomBytes = (length: number): Uint8Array => {
   }
 }
 
-export const split = (secret: string): string[] => {
-  const buff = utf8.encode(secret)
-  const rand1 = randomBytes(buff.length)
-  const rand2 = new Uint8Array(rand1) // Make a copy
-  for (const i in buff) {
-    rand2[i] = rand2[i] ^ buff[i]
-  }
-  return [b64.encode(rand1), b64.encode(rand2)]
+const SALT_LENGTH = 32
+
+const hashOf = (windowNameHalf: string) =>
+  b64.encode(hash(utf8.encode(windowNameHalf)))
+
+const xor = (data: Uint8Array, pad: Uint8Array) =>
+  new Uint8Array(data).map((byte, i) => byte ^ pad[i])
+
+export const split = (secret: string): [string, string] => {
+  const data = utf8.encode(secret)
+  const pad = randomBytes(data.length + SALT_LENGTH)
+  const windowNameHalf = b64.encode(pad)
+  const ciphertext = b64.encode(xor(data, pad))
+  return [windowNameHalf, `${ciphertext}.${hashOf(windowNameHalf)}`]
 }
 
-export const join = (a: string, b: string) => {
-  if (a.length !== b.length) {
+export const join = (windowNameHalf: string, sessionStorageHalf: string) => {
+  const [ciphertext, expectedHash] = sessionStorageHalf.split('.')
+  if (expectedHash !== hashOf(windowNameHalf)) {
     return null
   }
-  const aBuff = b64.decode(a)
-  const bBuff = b64.decode(b)
-  const output = new Uint8Array(aBuff.length)
-  for (const i in output) {
-    output[i] = aBuff[i] ^ bBuff[i]
-  }
-  return utf8.decode(output)
+  return utf8.decode(xor(b64.decode(ciphertext), b64.decode(windowNameHalf)))
 }
 
 // --
 
-const loadObjectFromWindowName = (): { [key: string]: string } => {
-  if (!window.top.name || window.top.name === '') {
-    return {}
-  }
+export const canPersist = () => {
   try {
-    return JSON.parse(window.top.name)
+    window.top.name
+    window.sessionStorage
+    return true
+  } catch {
+    return false
+  }
+}
+
+const loadObjectFromWindowName = (): Record<string, unknown> => {
+  try {
+    const saved = JSON.parse(window.top.name)
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      return saved
+    }
   } catch {}
   return {}
 }
@@ -50,13 +62,17 @@ export const saveToWindowName = (name: string, data: string) => {
   window.top.name = JSON.stringify(obj)
 }
 
-export const loadFromWindowName = (name: string) => {
+export const readFromWindowName = (name: string) => {
+  const half = loadObjectFromWindowName()[name]
+  return typeof half === 'string' ? half : null
+}
+
+export const removeFromWindowName = (name: string) => {
   const saved = loadObjectFromWindowName()
   if (!(name in saved)) {
-    return null
+    return
   }
-  const { [name]: out, ...safe } = saved
-  const json = JSON.stringify(safe)
+  delete saved[name]
+  const json = JSON.stringify(saved)
   window.top.name = json === '{}' ? '' : json
-  return out || null
 }
