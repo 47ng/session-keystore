@@ -519,9 +519,8 @@ test('v0 to v1 conversion', () => {
   const future = Date.now() + 1000
   const json = JSON.stringify([['foo', { key: 'bar', expiresAt: future }]])
   const [a, b] = split(json)
-  const storageKey = 'session-keystore:default'
-  saveToWindowName(storageKey, a)
-  window.sessionStorage.setItem(storageKey, b)
+  saveToWindowName(storageKey('default'), a)
+  window.sessionStorage.setItem(storageKey('default'), b)
   const store = new SK()
   expect(store.get('foo')).toEqual('bar')
   expect(store.get('foo', future)).toBeNull()

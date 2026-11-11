@@ -32,9 +32,8 @@ export const join = (windowNameHalf: string, sessionStorageHalf: string) => {
 
 export const canPersist = () => {
   try {
-    window.top!.name
-    window.sessionStorage
-    return true
+    // Both throw when blocked: a cross-origin top frame, or no storage access
+    return typeof window.top!.name === 'string' && !!window.sessionStorage
   } catch {
     return false
   }
