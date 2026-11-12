@@ -37,6 +37,38 @@ export const canPersist = () => {
   }
 };
 
+export const storagePrefix = "session-keystore:";
+
+// Whether the page before this one in the tab, or the same page on a
+// reload, had the same origin. Read in the top frame, as it owns window.name.
+// Chromium keeps window.name across sites, so this is the only way to tell
+// there. Without the Navigation API, assume it did.
+export const followsSameOriginPage = () => window.top!.navigation?.activation?.from !== null;
+
+// Marks the top window, which every page gets anew and its frames share
+const forgotOnArrival = Symbol.for("session-keystore:forgot-on-arrival");
+
+// Like forgetEarlierPages, once per page: stores created later must not
+// remove the shares that `persist()` wrote on this page.
+export const forgetEarlierPagesOnArrival = () => {
+  const top = window.top as unknown as Record<symbol, boolean>;
+  if (!top[forgotOnArrival]) {
+    top[forgotOnArrival] = true;
+    forgetEarlierPages();
+  }
+};
+
+// Removes the shares that earlier pages left for the next one, for every
+// store: a sessionStorage share is only on disk between pages.
+export const forgetEarlierPages = () => {
+  for (const key of Object.keys(window.sessionStorage)) {
+    if (key.startsWith(storagePrefix)) {
+      window.sessionStorage.removeItem(key);
+      removeFromWindowName(key);
+    }
+  }
+};
+
 const loadObjectFromWindowName = (): Record<string, unknown> => {
   try {
     const saved = JSON.parse(window.top!.name);

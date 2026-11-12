@@ -56,101 +56,100 @@ test("keeps keys across same-origin navigations", async ({ page }) => {
   await page.goto(origin);
   await setKey(page, "foo", "bar");
   await page.goto(`${origin}/other`);
-  await page.goto(origin);
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML("beforeend", '<a href="/">Home</a>');
+  });
+  await page.getByRole("link", { name: "Home" }).click();
+  await page.waitForURL(`${origin}/`);
   expect(await getKey(page, "foo")).toEqual("bar");
 });
 
-test("keeps keys after a back/forward cache restore", async ({ page, browserName }) => {
-  test.skip(
-    browserName !== "chromium",
-    "Playwright turns off the back/forward cache in Firefox and WebKit",
+const otherSite = "https://other.test";
+
+const serveOtherSite = (page: Page) =>
+  page.route(`${otherSite}/**`, (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<a href="${origin}/">Back to the store</a>`,
+    }),
   );
+
+// Chromium restores the page from the back/forward cache. Playwright turns
+// that cache off in Firefox and WebKit, so they load the page again.
+async function goBack(page: Page, browserName: string) {
+  await page.goBack({ waitUntil: "commit" });
+  await page.waitForFunction(
+    (fromCache) => window.restoredFromCache === fromCache,
+    browserName === "chromium",
+  );
+}
+
+test("keeps keys after Back and Forward", async ({ page, browserName }) => {
   await page.goto(origin);
   await setKey(page, "foo", "bar");
   await page.goto(`${origin}/other`);
-  await page.goBack({ waitUntil: "commit" });
-  await page.waitForFunction(() => window.restoredFromCache === true);
+  await goBack(page, browserName);
+  expect(await getKey(page, "foo")).toEqual("bar");
+  await page.goForward({ waitUntil: "commit" });
+  await page.waitForFunction(
+    (fromCache) => window.restoredFromCache === fromCache,
+    browserName === "chromium",
+  );
+  expect(await getKey(page, "foo")).toEqual("bar");
   await page.reload();
   expect(await getKey(page, "foo")).toEqual("bar");
 });
 
-test("does not bring back a key deleted on another page after a back/forward cache restore", async ({
+test("does not bring back a key deleted on another page after Back", async ({
   page,
   browserName,
 }) => {
-  test.skip(
-    browserName !== "chromium",
-    "Playwright turns off the back/forward cache in Firefox and WebKit",
-  );
   await page.goto(origin);
   await setKey(page, "foo", "bar");
   await page.goto(`${origin}/other`);
   expect(await getKey(page, "foo")).toEqual("bar");
   await page.evaluate(() => window.store.delete("foo"));
-  await page.goBack({ waitUntil: "commit" });
-  await page.waitForFunction(() => window.restoredFromCache === true);
+  await goBack(page, browserName);
+  expect(await getKey(page, "foo")).toBeNull();
   await page.reload();
   expect(await getKey(page, "foo")).toBeNull();
 });
 
-test("ignores window.name changes from another site after a back/forward cache restore", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(
-    browserName !== "chromium",
-    "Playwright turns off the back/forward cache in Firefox and WebKit",
-  );
-  const otherSite = "https://other.test";
-  await page.route(`${otherSite}/**`, (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: '<script>window.name = "tampered"</script>',
-    }),
-  );
+test("keeps keys across history changes in the same page", async ({ page }) => {
   await page.goto(origin);
   await setKey(page, "foo", "bar");
-  await page.goto(otherSite);
-  await page.goBack({ waitUntil: "commit" });
-  await page.waitForFunction(() => window.restoredFromCache === true);
-  await page.reload();
+  await page.evaluate(() => history.pushState(null, "", "/route"));
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        addEventListener("popstate", resolve, { once: true });
+        history.back();
+      }),
+  );
   expect(await getKey(page, "foo")).toEqual("bar");
 });
 
-test("ignores keys another site changes in window.name", async ({ page, browserName }) => {
-  test.skip(
-    browserName !== "chromium",
-    "Firefox and WebKit clear window.name when the tab goes to another site",
-  );
-  const otherSite = "https://other.test";
-  await page.route(`${otherSite}/**`, (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: `<script>
-        const from = '[["apiKey",{"v":1,"value":"secret"}]]'
-        const to = '[["apiKey",{"v":1,"value":"second"}]]'
-        const halves = JSON.parse(window.name)
-        const half = halves['session-keystore:default']
-        const pad = atob(half.replaceAll('-', '+').replaceAll('_', '/'))
-        const changed = Array.from(pad, (char, i) =>
-          String.fromCharCode(
-            char.charCodeAt(0) ^ (from.charCodeAt(i) ^ to.charCodeAt(i) || 0)
-          )
-        ).join('')
-        halves['session-keystore:default'] = btoa(changed)
-          .replaceAll('+', '-')
-          .replaceAll('/', '_')
-        window.name = JSON.stringify(halves)
-        window.changed = true
-      </script>`,
-    }),
-  );
+test("forgets keys after Back from another site", async ({ page, browserName }) => {
+  await serveOtherSite(page);
   await page.goto(origin);
-  await setKey(page, "apiKey", "secret");
+  await setKey(page, "foo", "bar");
   await page.goto(otherSite);
-  expect(await page.evaluate(() => "changed" in window)).toBe(true);
+  await goBack(page, browserName);
+  expect(await getKey(page, "foo")).toBeNull();
+  await page.reload();
+  expect(await getKey(page, "foo")).toBeNull();
+});
+
+test("forgets keys after a link back from another site", async ({ page }) => {
+  await serveOtherSite(page);
   await page.goto(origin);
-  expect(await getKey(page, "apiKey")).toBeNull();
+  await setKey(page, "foo", "bar");
+  await page.goto(otherSite);
+  await page.getByRole("link", { name: "Back to the store" }).click();
+  await page.waitForURL(`${origin}/`);
+  expect(await getKey(page, "foo")).toBeNull();
+  await page.reload();
+  expect(await getKey(page, "foo")).toBeNull();
 });
 
 test("works in memory inside a cross-origin iframe", async ({ page }) => {
@@ -172,7 +171,6 @@ test("works in memory inside a cross-origin iframe", async ({ page }) => {
 });
 
 test("shows another site no key material in window.name", async ({ page }) => {
-  const otherSite = "https://other.test";
   await page.route(`${otherSite}/**`, (route) =>
     route.fulfill({ contentType: "text/html", body: "<!doctype html>" }),
   );

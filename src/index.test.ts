@@ -2,6 +2,7 @@ import { b64, utf8 } from "@47ng/codec";
 import { hash } from "@stablelib/sha256";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { startNewPage, stubActivation } from "../test/navigation.ts";
 import SK from "./index.ts";
 import { split, join, saveToWindowName } from "./utility.ts";
 
@@ -19,6 +20,7 @@ function reloadPage(name: string, { lateWindowNameWrites = true } = {}) {
     // the page unloads (beforeunload, pagehide or unload)
     window.top!.name = nameBeforeUnload;
   }
+  startNewPage();
   return new SK({ name });
 }
 
@@ -510,6 +512,86 @@ describe("Persistence across page loads", () => {
     restoreFromBackForwardCache();
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull();
     expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+
+  test("keeps keys after a reload without the Navigation API", () => {
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    stubActivation(undefined);
+    expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+});
+
+describe("After a page of another site", () => {
+  test("forgets keys", () => {
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    stubActivation({ from: null });
+    expect(reloadPage(name).get("foo")).toBeNull();
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("forgets the keys of stores the page does not use", () => {
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    stubActivation({ from: null });
+    reloadPage(uniqueName());
+    expect(window.sessionStorage.length).toBe(0);
+    expect(window.top!.name).toEqual("");
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("keeps keys persisted before another store starts", () => {
+    const name = uniqueName();
+    stubActivation({ from: null });
+    reloadPage(uniqueName());
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    store.persist();
+    new SK({ name: uniqueName() });
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+
+  test("forgets keys after a back/forward cache restore", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    const deleted = vi.fn();
+    store.on("deleted", deleted);
+    stubActivation({ from: null });
+    restoreFromBackForwardCache();
+    expect(store.get("foo")).toBeNull();
+    expect(deleted).toHaveBeenCalledWith({ name: "foo" });
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull();
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("forgets keys of stores the page does not use, after a back/forward cache restore", () => {
+    const name = uniqueName();
+    new SK({ name: uniqueName() });
+    // Shares that a page using this store left on its way out
+    const [windowNameHalf, sessionStorageHalf] = split('[["foo",{"v":1,"value":"bar"}]]');
+    saveToWindowName(storageKey(name), windowNameHalf);
+    window.sessionStorage.setItem(storageKey(name), sessionStorageHalf);
+    stubActivation({ from: null });
+    restoreFromBackForwardCache();
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("keeps keys set after a back/forward cache restore", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "old");
+    stubActivation({ from: null });
+    restoreFromBackForwardCache();
+    store.set("foo", "new");
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("foo")).toEqual("new");
   });
 });
 

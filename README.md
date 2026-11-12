@@ -19,7 +19,8 @@ E2EE applications.
 
 - In-memory storage: no clear-text persistance to disk
 - Session-bound: cleared when closing tab/window (browser-only)
-- Survives hard-reloads of the page (browser-only)
+- Survives reloads, links, Back and Forward between pages of the same origin in the tab (browser-only)
+- Cleared when the tab comes back from another site (browser-only)
 - Optional expiration dates
 - Event emitter API for key CRUD operations
 
@@ -170,7 +171,25 @@ Other browsers also lose the whole store if the call happens after the
 store's own `pagehide` listener has run (for example in `unload`).
 A key deleted or cleared while the page unloads never comes back.
 
-When the page comes back from the back/forward cache, it still holds the keys in memory.
+### When keys are kept
+
+The store loads keys when the page follows another page of the same origin in the tab:
+a reload, a link, a form, a redirect, Back or Forward.
+When the page before it was on another site, every store starts empty, in every browser,
+whether the tab comes back with Back or a link.
+The store also removes the shares that earlier pages left, for every store name,
+so that they cannot come back on a later page.
+To tell, it reads `navigation.activation.from`, which is `null` after a page of another origin.
+Without the Navigation API, the store loads the keys it finds.
+WebKit clears `window.name` on the way to another site, so the keys are lost anyway;
+Firefox restores it on Back, so the keys come back there.
+
+Navigations inside a single-page app (`history.pushState()`, `popstate`)
+stay on the same page, so the keys stay in memory.
+
+When Back or Forward brings the page back from the back/forward cache, it still holds the keys in memory.
+If the page before it was on another site, the store forgets them, emits `deleted` for each one,
+and removes the shares that earlier pages left.
 If another page changed the store in the meantime, the keys are out of date,
 so the store forgets them and emits `deleted` for each one:
 a key deleted on the other page does not come back.
@@ -187,12 +206,8 @@ When the store cannot reach `window.top.name` or sessionStorage
 Chromium usually keeps `window.name` when the tab goes to another site,
 so that site can read the store name and the `window.name` share:
 base64 text of random bytes. Its length shows the size of the stored JSON (the share holds 32 bytes more).
-It cannot read the sessionStorage share, so it cannot rebuild the keys.
-It can change or erase the `window.name` share, though.
-In Chromium, a page that comes back from the back/forward cache gets its own `window.name` back,
-so the other site's changes have no effect.
-Firefox and WebKit clear `window.name` when the tab goes to another site.
-Firefox restores it when the user comes back. WebKit does not, so the store loses the keys.
+It cannot read the sessionStorage share, so it cannot rebuild the keys,
+and the store does not load them when the tab comes back.
 
 ### Integrity check
 

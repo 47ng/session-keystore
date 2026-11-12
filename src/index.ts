@@ -5,6 +5,10 @@ import {
   split,
   join,
   canPersist,
+  storagePrefix,
+  followsSameOriginPage,
+  forgetEarlierPages,
+  forgetEarlierPagesOnArrival,
   saveToWindowName,
   readFromWindowName,
   removeFromWindowName,
@@ -61,7 +65,7 @@ export default class SessionKeystore<Keys = string> {
 
   constructor(opts: ConstructorOptions = {}) {
     this.name = opts.name || "default";
-    this.#storageKey = `session-keystore:${this.name}`;
+    this.#storageKey = `${storagePrefix}${this.name}`;
     this.#revisionKey = `${this.#storageKey}:revision`;
     this.#emitter = mitt();
     this.#store = new Map();
@@ -83,7 +87,9 @@ export default class SessionKeystore<Keys = string> {
         if (!event.persisted) {
           return;
         }
-        if (this._changedElsewhere()) {
+        if (!followsSameOriginPage()) {
+          this._forgetAll();
+        } else if (this._changedElsewhere()) {
           this._dropOutdatedKeys();
         } else if (this._ownsWindowName()) {
           this._writeWindowNameHalf();
@@ -195,6 +201,15 @@ export default class SessionKeystore<Keys = string> {
     });
   }
 
+  // The tab comes back from another site: forget every key, from memory and
+  // from the shares earlier pages left.
+  private _forgetAll() {
+    this.clear();
+    if (this.#canPersist) {
+      forgetEarlierPages();
+    }
+  }
+
   private _writeWindowNameHalf() {
     if (!this.#canPersist) {
       return;
@@ -224,6 +239,11 @@ export default class SessionKeystore<Keys = string> {
   }
 
   private _load() {
+    // After a page of another site: start empty
+    if (!followsSameOriginPage()) {
+      forgetEarlierPagesOnArrival();
+      return;
+    }
     const windowNameHalf = readFromWindowName(this.#storageKey);
     const sessionStorageHalf = window.sessionStorage.getItem(this.#storageKey);
     window.sessionStorage.removeItem(this.#storageKey);
