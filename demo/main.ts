@@ -1,4 +1,5 @@
 import SessionKeystore from "../src/index.ts";
+import { readRevision } from "../src/utility.ts";
 
 declare global {
   interface Window {
@@ -16,8 +17,12 @@ function noteArrival(event: string) {
   const activation = window.navigation?.activation;
   const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
   let windowName = "";
+  let revision: string | null = null;
   try {
     windowName = Object.keys(JSON.parse(window.name)).join(", ");
+  } catch {}
+  try {
+    revision = readRevision("default");
   } catch {}
   const line = [
     `${new Date().toLocaleTimeString()} ${event}`,
@@ -26,7 +31,7 @@ function noteArrival(event: string) {
       : `from ${activation?.from?.url ?? "null"} (${activation?.navigationType})`,
     `timing: ${entry?.type}`,
     `window.name: ${windowName || "-"}`,
-    `revision: ${sessionStorage.getItem("session-keystore:default:revision") ?? "-"}`,
+    `revision: ${revision ?? "-"}`,
   ].join(" · ");
   diagnostics.textContent = `${line}\n${diagnostics.textContent}`;
 }

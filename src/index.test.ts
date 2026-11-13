@@ -4,7 +4,15 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { startNewPage, stubActivation } from "../test/navigation.ts";
 import SK from "./index.ts";
-import { split, join, saveToWindowName } from "./utility.ts";
+import {
+  split,
+  join,
+  saveToWindowName,
+  noteHiddenPage,
+  saveRevision,
+  tagShare,
+  forgetEarlierPages,
+} from "./utility.ts";
 
 let storeCount = 0;
 const uniqueName = () => `store-${++storeCount}`;
@@ -31,12 +39,75 @@ function visitAnotherPage(name: string, onOtherPage: (store: SK) => void) {
   window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
   onOtherPage(new SK({ name }));
   window.top!.name = nameOnThisPage;
+  stubActivation(traversal());
   window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
 }
 
-function restoreFromBackForwardCache() {
+// Firefox gives the page back the window.name and the sessionStorage
+// it had when it left, without the other page's changes.
+function visitAnotherPageAndGetOldStorageBack(name: string, onOtherPage: (store: SK) => void) {
   window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+  const nameOnThisPage = window.top!.name;
+  const storageOnThisPage = Object.entries(window.sessionStorage);
+  onOtherPage(new SK({ name }));
+  window.sessionStorage.clear();
+  for (const [key, value] of storageOnThisPage) {
+    window.sessionStorage.setItem(key, value);
+  }
+  window.top!.name = nameOnThisPage;
+  stubActivation(traversal());
   window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+}
+
+// Chromium and Firefox update navigation.activation before pageshow,
+// so by default each restore gets a new entry and does not look like Safari
+let traversalCount = 0;
+const traversal = (from: { id: string } | null = { id: `entry-${++traversalCount}` }) =>
+  ({ from, navigationType: "traverse" }) as const;
+
+function restoreFromBackForwardCache(
+  activation: Parameters<typeof stubActivation>[0] = traversal(),
+  { otherPageHid = false } = {},
+) {
+  window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+  if (otherPageHid) {
+    noteHiddenPage("another-page");
+  }
+  stubActivation(activation);
+  window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+}
+
+const quotaExceeded = () => new DOMException("Full", "QuotaExceededError");
+
+function failWrites(storage: Storage, { key = "", times = Infinity } = {}) {
+  const { setItem, removeItem } = Storage.prototype;
+  let failures = 0;
+  const fails = (target: Storage, name: string) =>
+    target === storage && name.includes(key) && failures++ < times;
+  vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, name) {
+    if (fails(this, name)) {
+      throw quotaExceeded();
+    }
+    removeItem.call(this, name);
+  });
+  return vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+    this: Storage,
+    name,
+    value,
+  ) {
+    if (fails(this, name)) {
+      throw quotaExceeded();
+    }
+    setItem.call(this, name, value);
+  });
+}
+
+// The shares and revision that a page using this store leaves for the next page
+function saveShares(name: string, json: string) {
+  const [windowNameHalf, sessionStorageHalf] = split(json);
+  saveRevision(name, "saved-revision");
+  saveToWindowName(storageKey(name), windowNameHalf);
+  window.sessionStorage.setItem(storageKey(name), tagShare(sessionStorageHalf, "saved-revision"));
 }
 
 function xorIntoWindowNameHalf(name: string, from: string, to: string) {
@@ -506,6 +577,143 @@ describe("Persistence across page loads", () => {
     expect(reloadPage(name).get("foo")).toBeNull();
   });
 
+  test("forgets a key deleted on another page when the page gets its old sessionStorage back", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    visitAnotherPageAndGetOldStorageBack(name, (other) => other.delete("foo"));
+    expect(store.get("foo")).toBeNull();
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("does not bring back a value changed on another page when the page gets its old sessionStorage back", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "old");
+    visitAnotherPageAndGetOldStorageBack(name, (other) => other.set("foo", "new"));
+    expect(store.get("foo")).toBeNull();
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("removes the old shares when the page gets its old sessionStorage back", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    visitAnotherPageAndGetOldStorageBack(name, (other) => other.delete("foo"));
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull();
+    expect(window.top!.name).not.toContain(storageKey(name));
+  });
+
+  test("keeps the current shares when another page changed the store", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "old");
+    visitAnotherPage(name, (other) => {
+      other.set("foo", "new");
+      other.persist();
+    });
+    expect(store.get("foo")).toBeNull();
+    expect(window.sessionStorage.getItem(storageKey(name))).not.toBeNull();
+  });
+
+  test("does not bring back a key that a listener kept from being dropped", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    store.set("egg", "spam");
+    store.on("deleted", () => {
+      throw new Error("listener");
+    });
+    visitAnotherPage(name, (other) => other.delete("foo"));
+    expect(store.get("foo")).toBeNull();
+    expect(store.get("egg")).toBeNull();
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("does not bring back a deleted key when the new revision cannot be saved", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    store.set("egg", "spam");
+    visitAnotherPage(name, (other) => {
+      const { setItem } = Storage.prototype;
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+        this: Storage,
+        key,
+        value,
+      ) {
+        if (this === window.localStorage) {
+          throw quotaExceeded();
+        }
+        setItem.call(this, key, value);
+      });
+      expect(() => other.delete("foo")).not.toThrow();
+      vi.restoreAllMocks();
+    });
+    expect(store.get("foo")).toBeNull();
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("forgets keys when the share names an older revision", () => {
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    saveRevision(name, "newer-revision");
+    expect(reloadPage(name, { lateWindowNameWrites: false }).get("foo")).toBeNull();
+  });
+
+  test("forgets every share when the restore check throws", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    const { getItem } = Storage.prototype;
+    vi.spyOn(Storage.prototype, "getItem").mockImplementationOnce(function (this: Storage) {
+      throw new DOMException("Access denied", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key) {
+      return getItem.call(this, key);
+    });
+    stubActivation(traversal());
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    vi.restoreAllMocks();
+    expect(store.get("foo")).toBeNull();
+    expect(Object.keys(window.sessionStorage).join()).not.toContain("session-keystore:");
+    expect(window.top!.name).not.toContain("session-keystore:");
+  });
+
+  test("forgets keys after another page clears sessionStorage", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    window.sessionStorage.clear();
+    new SK({ name }).set("foo", "new");
+    stubActivation(traversal());
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(store.get("foo")).toBeNull();
+  });
+
+  test("does not write the old share when the old revision cannot be removed", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    store.set("egg", "spam");
+    failWrites(window.localStorage, { times: 1 });
+    expect(() => store.delete("foo")).toThrow();
+    vi.restoreAllMocks();
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("keeps keys when another page only read them and the page gets its old sessionStorage back", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    visitAnotherPageAndGetOldStorageBack(name, (other) => other.get("foo"));
+    expect(store.get("foo")).toEqual("bar");
+    expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+
   test("removes the sessionStorage half when the page comes back from the back/forward cache", () => {
     const name = uniqueName();
     new SK({ name }).set("foo", "bar");
@@ -537,7 +745,8 @@ describe("After a page of another site", () => {
     new SK({ name }).set("foo", "bar");
     stubActivation({ from: null });
     reloadPage(uniqueName());
-    expect(window.sessionStorage.length).toBe(0);
+    expect(Object.keys(window.sessionStorage)).not.toContain(storageKey(name));
+    expect(window.localStorage.length).toBe(0);
     expect(window.top!.name).toEqual("");
     stubActivation({ from: {} });
     expect(reloadPage(name).get("foo")).toBeNull();
@@ -561,8 +770,7 @@ describe("After a page of another site", () => {
     store.set("foo", "bar");
     const deleted = vi.fn();
     store.on("deleted", deleted);
-    stubActivation({ from: null });
-    restoreFromBackForwardCache();
+    restoreFromBackForwardCache(traversal(null));
     expect(store.get("foo")).toBeNull();
     expect(deleted).toHaveBeenCalledWith({ name: "foo" });
     expect(window.sessionStorage.getItem(storageKey(name))).toBeNull();
@@ -573,25 +781,264 @@ describe("After a page of another site", () => {
   test("forgets keys of stores the page does not use, after a back/forward cache restore", () => {
     const name = uniqueName();
     new SK({ name: uniqueName() });
-    // Shares that a page using this store left on its way out
-    const [windowNameHalf, sessionStorageHalf] = split('[["foo",{"v":1,"value":"bar"}]]');
-    saveToWindowName(storageKey(name), windowNameHalf);
-    window.sessionStorage.setItem(storageKey(name), sessionStorageHalf);
-    stubActivation({ from: null });
-    restoreFromBackForwardCache();
+    saveShares(name, '[["foo",{"v":1,"value":"bar"}]]');
+    restoreFromBackForwardCache(traversal(null));
+    expect(window.sessionStorage.getItem(storageKey(name))).toBeNull();
+    expect(window.top!.name).not.toContain(storageKey(name));
     stubActivation({ from: {} });
     expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("forgets every key even when a deleted listener throws", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    store.set("egg", "spam");
+    store.on("deleted", () => {
+      throw new Error("listener");
+    });
+    restoreFromBackForwardCache(traversal(null));
+    expect(store.get("foo")).toBeNull();
+    expect(store.get("egg")).toBeNull();
+    stubActivation({ from: {} });
+    expect(reloadPage(name).get("egg")).toBeNull();
+  });
+
+  test("emits deleted even when storage fails while it forgets", () => {
+    const store = new SK({ name: uniqueName() });
+    store.set("foo", "bar");
+    const deleted = vi.fn();
+    store.on("deleted", deleted);
+    failWrites(window.localStorage, { times: 1 });
+    restoreFromBackForwardCache(traversal(null));
+    expect(deleted).toHaveBeenCalledWith({ name: "foo" });
+  });
+
+  test("keeps what other tabs saved in localStorage", () => {
+    window.localStorage.setItem("session-keystore:other-tab:revision:x", `r1 ${Date.now()}`);
+    new SK({ name: uniqueName() }).set("foo", "bar");
+    restoreFromBackForwardCache(traversal(null));
+    expect(window.localStorage.getItem("session-keystore:other-tab:revision:x")).not.toBeNull();
+  });
+
+  test("leaves the keys of its opener alone in a popup", () => {
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    const openerStorage = Object.entries(window.sessionStorage);
+    const openerName = window.top!.name;
+    // The popup and the opener share this sessionStorage here; the opener's
+    // copy comes back below
+    Object.defineProperty(window.top!, "opener", { configurable: true, value: window.top });
+    window.top!.name = "";
+    stubActivation({ from: { id: "popup-page-without-store" } });
+    startNewPage();
+    new SK({ name }).set("egg", "spam");
+    delete (window.top as { opener?: unknown }).opener;
+    window.sessionStorage.clear();
+    for (const [key, value] of openerStorage) {
+      window.sessionStorage.setItem(key, value);
+    }
+    window.top!.name = openerName;
+    stubActivation({ from: {} });
+    expect(reloadPage(name, { lateWindowNameWrites: false }).get("foo")).toEqual("bar");
+  });
+
+  test("does not let a cached popup page keep keys once the popup takes a new tab ID", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    const storageOnThisPage = Object.entries(window.sessionStorage);
+    const nameOnThisPage = window.top!.name;
+    // The opener can be read now, and still has the same tab ID
+    Object.defineProperty(window.top!, "opener", { configurable: true, value: window.top });
+    new SK({ name: uniqueName() });
+    delete (window.top as { opener?: unknown }).opener;
+    // Firefox gives the cached page its old sessionStorage, with the old tab ID
+    window.sessionStorage.clear();
+    for (const [key, value] of storageOnThisPage) {
+      window.sessionStorage.setItem(key, value);
+    }
+    window.top!.name = nameOnThisPage;
+    stubActivation(traversal());
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(store.get("foo")).toBeNull();
   });
 
   test("keeps keys set after a back/forward cache restore", () => {
     const name = uniqueName();
     const store = new SK({ name });
     store.set("foo", "old");
-    stubActivation({ from: null });
-    restoreFromBackForwardCache();
+    restoreFromBackForwardCache(traversal(null));
     store.set("foo", "new");
     stubActivation({ from: {} });
     expect(reloadPage(name).get("foo")).toEqual("new");
+  });
+});
+
+// Safari, or a page that first loaded with Back
+describe("When navigation.activation has not changed by pageshow", () => {
+  const firstPageOfTheTab = { from: null, navigationType: "push" } as const;
+
+  test("keeps keys after Back from another page of the same origin", () => {
+    stubActivation(firstPageOfTheTab);
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    restoreFromBackForwardCache(firstPageOfTheTab, { otherPageHid: true });
+    expect(store.get("foo")).toEqual("bar");
+    stubActivation({ from: { id: "this-page" }, navigationType: "reload" });
+    expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+
+  test("forgets keys after Back from another site", () => {
+    const loadedAfterStart = { from: { id: "start" }, navigationType: "push" } as const;
+    stubActivation(loadedAfterStart);
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    const deleted = vi.fn();
+    store.on("deleted", deleted);
+    restoreFromBackForwardCache(loadedAfterStart);
+    expect(store.get("foo")).toBeNull();
+    expect(deleted).toHaveBeenCalledWith({ name: "foo" });
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("forgets the keys of every store after Back from another site", () => {
+    stubActivation(firstPageOfTheTab);
+    const first = new SK({ name: uniqueName() });
+    const second = new SK({ name: uniqueName() });
+    first.set("foo", "a");
+    second.set("foo", "b");
+    restoreFromBackForwardCache(firstPageOfTheTab);
+    expect(first.get("foo")).toBeNull();
+    expect(second.get("foo")).toBeNull();
+  });
+
+  test("forgets keys when no page noted that it hid", () => {
+    stubActivation(firstPageOfTheTab);
+    const store = new SK({ name: uniqueName() });
+    store.set("foo", "bar");
+    failWrites(window.sessionStorage, { key: "last-hidden-page" });
+    restoreFromBackForwardCache(firstPageOfTheTab);
+    expect(store.get("foo")).toBeNull();
+  });
+
+  test("forgets keys of an earlier page after a later page forgot the tab", () => {
+    stubActivation(firstPageOfTheTab);
+    const store = new SK({ name: uniqueName() });
+    store.set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    forgetEarlierPages();
+    noteHiddenPage("later-page");
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(store.get("foo")).toBeNull();
+  });
+
+  test("keeps deciding without navigation.activation once Safari updates it", () => {
+    stubActivation(firstPageOfTheTab);
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    restoreFromBackForwardCache(firstPageOfTheTab, { otherPageHid: true });
+    const updatedBySafari = traversal();
+    stubActivation(updatedBySafari);
+    restoreFromBackForwardCache(updatedBySafari);
+    expect(store.get("foo")).toBeNull();
+  });
+});
+
+describe("When navigation.activation has changed by pageshow", () => {
+  test("forgets keys after another site, even when another page hid since", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    restoreFromBackForwardCache(traversal(null), { otherPageHid: true });
+    expect(store.get("foo")).toBeNull();
+  });
+
+  test("keeps keys after a page of the same origin that does not use the store", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    restoreFromBackForwardCache(traversal());
+    expect(store.get("foo")).toEqual("bar");
+  });
+
+  test("keeps keys without the Navigation API", () => {
+    stubActivation(undefined);
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(store.get("foo")).toEqual("bar");
+  });
+
+  test("keeps keys after Back, Forward and Back again next to a page that does not use the store", () => {
+    const name = uniqueName();
+    const store = new SK({ name });
+    store.set("foo", "bar");
+    // Both restores give the same navigation.activation: the store must not
+    // take the second one for Safari's late update
+    const backFromB = traversal({ id: "b" });
+    restoreFromBackForwardCache(backFromB);
+    restoreFromBackForwardCache(backFromB);
+    expect(store.get("foo")).toEqual("bar");
+  });
+});
+
+describe("Revisions in localStorage", () => {
+  const day = 24 * 60 * 60 * 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("removes the revisions that tabs saved over 30 days ago", () => {
+    window.localStorage.setItem("session-keystore:old-tab:store", `r1 ${Date.now() - 31 * day}`);
+    window.localStorage.setItem("session-keystore:recent-tab:store", `r2 ${Date.now() - day}`);
+    window.localStorage.setItem("app-setting", "kept");
+    new SK({ name: uniqueName() });
+    expect(window.localStorage.getItem("session-keystore:old-tab:store")).toBeNull();
+    expect(window.localStorage.getItem("session-keystore:recent-tab:store")).not.toBeNull();
+    expect(window.localStorage.getItem("app-setting")).toEqual("kept");
+  });
+
+  test("keeps the keys of a tab that loads a page at least every 30 days", () => {
+    vi.useFakeTimers();
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    vi.advanceTimersByTime(20 * day);
+    reloadPage(name);
+    vi.advanceTimersByTime(20 * day);
+    new SK({ name: uniqueName() });
+    expect(reloadPage(name).get("foo")).toEqual("bar");
+  });
+
+  test("forgets keys whose revision is over 30 days old", () => {
+    vi.useFakeTimers();
+    const name = uniqueName();
+    new SK({ name }).set("foo", "bar");
+    vi.advanceTimersByTime(31 * day);
+    expect(reloadPage(name).get("foo")).toBeNull();
+  });
+
+  test("writes nothing to localStorage for a tab without keys", () => {
+    new SK({ name: uniqueName() });
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    expect(window.localStorage.length).toBe(0);
+    restoreFromBackForwardCache();
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  test("removes its revision once the store is empty", () => {
+    const store = new SK({ name: uniqueName() });
+    store.set("foo", "bar");
+    store.delete("foo");
+    expect(window.localStorage.length).toBe(0);
   });
 });
 
@@ -600,9 +1047,7 @@ test("drops every key when a saved entry has an unknown format", () => {
     ["foo", { v: 1, value: "bar" }],
     ["egg", { v: 2, value: "spam" }],
   ]);
-  const [a, b] = split(json);
-  saveToWindowName(storageKey("default"), a);
-  window.sessionStorage.setItem(storageKey("default"), b);
+  saveShares("default", json);
   const store = new SK();
   expect(store.get("foo")).toBeNull();
   expect(store.get("egg")).toBeNull();

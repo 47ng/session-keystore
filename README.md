@@ -177,8 +177,8 @@ The store loads keys when the page follows another page of the same origin in th
 a reload, a link, a form, a redirect, Back or Forward.
 When the page before it was on another site, every store starts empty, in every browser,
 whether the tab comes back with Back or a link.
-The store also removes the shares that earlier pages left, for every store name,
-so that they cannot come back on a later page.
+The store also removes what earlier pages left in storage, for every store name,
+so that it cannot come back on a later page.
 To tell, it reads `navigation.activation.from`, which is `null` after a page of another origin.
 Without the Navigation API, the store loads the keys it finds.
 WebKit clears `window.name` on the way to another site, so the keys are lost anyway;
@@ -187,21 +187,65 @@ Firefox restores it on Back, so the keys come back there.
 Navigations inside a single-page app (`history.pushState()`, `popstate`)
 stay on the same page, so the keys stay in memory.
 
+Safari can load a URL that you type in the address bar before you press Enter
+(Settings → Search → "Preload Top Hit in the background").
+That page starts without the `window.name` share, so it starts empty.
+
 When Back or Forward brings the page back from the back/forward cache, it still holds the keys in memory.
 If the page before it was on another site, the store forgets them, emits `deleted` for each one,
-and removes the shares that earlier pages left.
+and removes what earlier pages left in storage.
 If another page changed the store in the meantime, the keys are out of date,
 so the store forgets them and emits `deleted` for each one:
 a key deleted on the other page does not come back.
-To tell, the store keeps a random revision ID in sessionStorage
-that changes each time a key is set, deleted or expires.
+To tell, the store keeps a random revision ID that changes each time a key is set, deleted or expires.
 Otherwise, if `window.name` still holds its share, it removes the sessionStorage share,
 writes a new `window.name` share and keeps the new sessionStorage share in memory.
-If not, it writes nothing until a key changes,
+If not, it writes no share until a key changes,
 and an old sessionStorage share can stay on disk until then.
+If anything throws when the page comes back, an event listener included,
+the store forgets the keys and removes what earlier pages left in storage.
 
-When the store cannot reach `window.top.name` or sessionStorage
+When a page comes back from the back/forward cache, Safari updates `navigation.activation` only after `pageshow`.
+It then gives the entry after this one as `from`: after Back, that entry is correct; after Forward, it is not.
+So the first time a page comes back from the back/forward cache,
+the store checks whether `navigation.activation` has changed since the page loaded,
+and keeps that choice until the page unloads.
+If it has not changed, the store stops using `navigation.activation`.
+Instead, it reads a note that every page that uses the store writes to sessionStorage on `pagehide`:
+the last page of the tab to hide.
+If the page that comes back is still the last one, no other page that uses the store hid since,
+so the store forgets the keys, as it does after another site. It does the same when the tab has no note.
+So in Safari, a page of the same origin that does not use the store counts as another site.
+After Back or Forward across more than one page in one step (for example with `history.go(-2)`,
+which the other site can also call), Safari can keep the keys even when the tab comes back from another site.
+A page that Back loads again (not from the cache) and that later comes back from the same page
+gets the same `navigation.activation` twice, so the store uses the note, as in Safari, in every browser.
+In Firefox, that page then gets back its own old note, so the store forgets the keys.
+
+When Back or Forward brings a page back from the back/forward cache, Firefox gives it
+the sessionStorage and `window.name` it had when it left, without the changes that later pages made.
+So the store keeps the revision ID in localStorage, under a random tab ID that it keeps in sessionStorage.
+The sessionStorage share names the revision it belongs to.
+The store loads a share only if its revision is the current one,
+so a share from an old copy of sessionStorage does not bring keys back.
+A popup starts with a copy of its opener's sessionStorage, tab ID included.
+Each time a store starts in the popup, if it can read the opener's sessionStorage and finds the same tab ID,
+it takes a new one.
+If a store in the popup saved keys before it could read the opener's sessionStorage,
+the popup removes the revision IDs under the shared tab ID before it takes a new one,
+so the opener loses its keys on its next page load or back/forward cache restore.
+Otherwise, as in a duplicated tab, the two tabs share a tab ID,
+and a change in one of them makes the other lose its keys on its next page load or back/forward cache restore.
+Clear keys with `clear()`, not by clearing sessionStorage:
+in Firefox, a page in the back/forward cache does not see that sessionStorage was cleared, and keeps its keys.
+
+localStorage stays after the tab closes, so each new store removes the revision IDs saved more than 30 days ago.
+A store saves a new revision ID each time a key changes, and saves it again each time a page loads its keys.
+If a store does neither for 30 days, it loses its keys.
+
+When the store cannot reach `window.top.name`, sessionStorage or localStorage
 (in a cross-origin iframe, or with storage blocked), it keeps keys in memory only.
+In a cross-origin iframe, it also forgets them each time the page comes back from the back/forward cache.
 
 Chromium usually keeps `window.name` when the tab goes to another site,
 so that site can read the store name and the `window.name` share:
@@ -215,7 +259,7 @@ The sessionStorage share also holds a SHA-256 hash of the `window.name` share.
 When the page loads, the store removes both shares, then hashes the `window.name` share again.
 If the hashes do not match, it loads no keys.
 The hash does not cover the sessionStorage share.
-Shares saved by version 1.x have no hash,
+Shares saved by version 1.x have no hash, and shares saved by 2.0 beta versions name no revision,
 so after an upgrade, each tab loses the keys that the old version saved.
 
 The `window.name` share holds 32 more random bytes than the XOR needs,

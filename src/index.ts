@@ -7,6 +7,16 @@ import {
   canPersist,
   storagePrefix,
   followsSameOriginPage,
+  noteActivationOnArrival,
+  noteHiddenPage,
+  leaveOpenerTab,
+  comesBackFromAnotherSite,
+  readRevision,
+  saveRevision,
+  removeRevision,
+  removeOldRevisions,
+  tagShare,
+  untagShare,
   forgetEarlierPages,
   forgetEarlierPagesOnArrival,
   saveToWindowName,
@@ -53,7 +63,6 @@ export default class SessionKeystore<Keys = string> {
   // Members
   readonly name: string;
   readonly #storageKey: string;
-  readonly #revisionKey: string;
   #emitter: Emitter<EventMap<Keys>>;
   #store: Map<Keys, ExpirableKey>;
   #timeouts: Map<Keys, ReturnType<typeof setTimeout>>;
@@ -66,33 +75,51 @@ export default class SessionKeystore<Keys = string> {
   constructor(opts: ConstructorOptions = {}) {
     this.name = opts.name || "default";
     this.#storageKey = `${storagePrefix}${this.name}`;
-    this.#revisionKey = `${this.#storageKey}:revision`;
     this.#emitter = mitt();
     this.#store = new Map();
     this.#timeouts = new Map();
     /* istanbul ignore else */
     if (typeof window !== "undefined") {
+      // They throw when the top frame is cross-origin or storage is blocked.
+      // Old revisions go first, so that a share whose revision no page saved
+      // for 30 days does not load.
       try {
+        noteActivationOnArrival();
+        leaveOpenerTab();
+        removeOldRevisions();
         this._load();
       } catch {}
       this.#canPersist = canPersist();
       if (this.#canPersist) {
-        this.#revision = window.sessionStorage.getItem(this.#revisionKey);
+        try {
+          if (this.#store.size > 0) {
+            // Saves the same revision again, to restart its 30 days
+            saveRevision(this.name, this.#revision!);
+          } else {
+            this.#revision = readRevision(this.name);
+          }
+        } catch {}
       }
       if (this.#store.size > 0) {
         this._writeWindowNameHalf();
       }
-      window.addEventListener("pagehide", () => this._writeSessionStorageHalf());
-      window.addEventListener("pageshow", (event) => {
-        if (!event.persisted) {
-          return;
+      window.addEventListener("pagehide", () => {
+        if (this.#canPersist) {
+          try {
+            noteHiddenPage();
+          } catch {}
         }
-        if (!followsSameOriginPage()) {
-          this._forgetAll();
-        } else if (this._changedElsewhere()) {
-          this._dropOutdatedKeys();
-        } else if (this._ownsWindowName()) {
-          this._writeWindowNameHalf();
+        this._writeSessionStorageHalf();
+      });
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) {
+          // If anything throws, a listener included, it forgets every key:
+          // a deleted key must never come back
+          try {
+            this._comeBackFromCache(comesBackFromAnotherSite(event));
+          } catch {
+            this._forgetAll();
+          }
         }
       });
     }
@@ -174,39 +201,74 @@ export default class SessionKeystore<Keys = string> {
 
   private _saveChange() {
     if (this.#canPersist) {
-      if (this.#store.size === 0) {
-        this.#revision = null;
-        window.sessionStorage.removeItem(this.#revisionKey);
-      } else {
+      // Drops the sessionStorage share first: if the old revision cannot be
+      // removed, pagehide has no old share to write. Then drops the old
+      // revision: if the new one cannot be saved, no share and no cached page
+      // can match.
+      window.sessionStorage.removeItem(this.#storageKey);
+      this.#halves = null;
+      removeRevision(this.name);
+      this.#revision = null;
+      if (this.#store.size > 0) {
         this.#revision = Math.random().toString(36).slice(2);
-        window.sessionStorage.setItem(this.#revisionKey, this.#revision);
+        try {
+          saveRevision(this.name, this.#revision);
+        } catch {}
       }
     }
     this._writeWindowNameHalf();
   }
 
+  private _comeBackFromCache(fromAnotherSite: boolean) {
+    if (fromAnotherSite) {
+      this._forgetAll();
+    } else if (this._changedElsewhere()) {
+      this._dropOutdatedKeys();
+    } else if (this._ownsWindowName()) {
+      this._writeWindowNameHalf();
+    }
+  }
+
   private _changedElsewhere() {
-    return this.#canPersist && window.sessionStorage.getItem(this.#revisionKey) !== this.#revision;
+    return this.#canPersist && readRevision(this.name) !== this.#revision;
   }
 
   // Another page changed the store while this one was in the back/forward
-  // cache: forget the outdated keys and shares, without writing anything.
+  // cache: forget every key, and the shares unless they belong to the
+  // current revision.
   private _dropOutdatedKeys() {
-    this.#halves = null;
-    this.#revision = window.sessionStorage.getItem(this.#revisionKey);
-    this.#store.forEach((_, key) => {
-      this._clearTimeout(key);
-      this.#store.delete(key);
-      this.#emitter.emit("deleted", { name: key });
+    this._dropKeys(() => {
+      this.#revision = readRevision(this.name);
+      const saved = untagShare(window.sessionStorage.getItem(this.#storageKey) ?? "");
+      if (saved?.revision !== this.#revision) {
+        window.sessionStorage.removeItem(this.#storageKey);
+        removeFromWindowName(this.#storageKey);
+      }
     });
   }
 
-  // The tab comes back from another site: forget every key, from memory and
-  // from the shares earlier pages left.
+  // The tab comes back from another site, or the store cannot tell: forget
+  // every key, from memory and from storage, for every store of the tab.
   private _forgetAll() {
-    this.clear();
-    if (this.#canPersist) {
-      forgetEarlierPages();
+    this._dropKeys(() => {
+      if (this.#canPersist) {
+        this.#revision = null;
+        forgetEarlierPages();
+      }
+    });
+  }
+
+  // Emits last, so that a listener that throws cannot keep keys, and in
+  // finally, so that listeners hear of the dropped keys even when storage fails
+  private _dropKeys(forgetStorage: () => void) {
+    const names = Array.from(this.#store.keys());
+    names.forEach((name) => this._clearTimeout(name));
+    this.#store.clear();
+    this.#halves = null;
+    try {
+      forgetStorage();
+    } finally {
+      names.forEach((name) => this.#emitter.emit("deleted", { name }));
     }
   }
 
@@ -228,7 +290,10 @@ export default class SessionKeystore<Keys = string> {
 
   private _writeSessionStorageHalf() {
     if (this.#halves && this._ownsWindowName()) {
-      window.sessionStorage.setItem(this.#storageKey, this.#halves.sessionStorage);
+      window.sessionStorage.setItem(
+        this.#storageKey,
+        tagShare(this.#halves.sessionStorage, this.#revision!),
+      );
     }
   }
 
@@ -245,13 +310,17 @@ export default class SessionKeystore<Keys = string> {
       return;
     }
     const windowNameHalf = readFromWindowName(this.#storageKey);
-    const sessionStorageHalf = window.sessionStorage.getItem(this.#storageKey);
+    const taggedShare = window.sessionStorage.getItem(this.#storageKey);
     window.sessionStorage.removeItem(this.#storageKey);
-    if (!windowNameHalf || !sessionStorageHalf) {
+    if (!windowNameHalf || !taggedShare) {
       return;
     }
     removeFromWindowName(this.#storageKey);
-    const json = join(windowNameHalf, sessionStorageHalf);
+    const saved = untagShare(taggedShare);
+    if (!saved || saved.revision !== readRevision(this.name)) {
+      return;
+    }
+    const json = join(windowNameHalf, saved.share);
     if (!json) {
       return;
     }
@@ -260,6 +329,7 @@ export default class SessionKeystore<Keys = string> {
       return;
     }
     this.#store = new Map(entries);
+    this.#revision = saved.revision;
     // Re-establish timeouts
     this.#store.forEach((_, key) => {
       this._setTimeout(key);

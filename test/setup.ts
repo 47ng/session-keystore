@@ -16,4 +16,5 @@ afterEach(() => {
   startNewPage();
   window.top!.name = "";
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });
