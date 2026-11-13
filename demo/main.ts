@@ -1,4 +1,5 @@
 import SessionKeystore from "../src/index.ts";
+import { readRevision } from "../src/utility.ts";
 
 declare global {
   interface Window {
@@ -7,6 +8,39 @@ declare global {
     restoredFromCache: boolean;
   }
 }
+
+// For manual testing in real browsers: what the store sees when the page
+// loads or comes back from the back/forward cache, before it runs.
+// Listeners run in order, so this one runs before the store's.
+const diagnostics = document.querySelector("#diagnostics")!;
+function noteArrival(event: string) {
+  const activation = window.navigation?.activation;
+  const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+  let windowName = "";
+  let revision: string | null = null;
+  try {
+    windowName = Object.keys(JSON.parse(window.name)).join(", ");
+  } catch {}
+  try {
+    revision = readRevision("default");
+  } catch {}
+  const line = [
+    `${new Date().toLocaleTimeString()} ${event}`,
+    activation === undefined
+      ? "no Navigation API"
+      : `from ${activation?.from?.url ?? "null"} (${activation?.navigationType})`,
+    `timing: ${entry?.type}`,
+    `window.name: ${windowName || "-"}`,
+    `revision: ${revision ?? "-"}`,
+  ].join(" · ");
+  diagnostics.textContent = `${line}\n${diagnostics.textContent}`;
+}
+noteArrival("load");
+addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    noteArrival("restored from the back/forward cache");
+  }
+});
 
 const store = new SessionKeystore();
 window.store = store;
